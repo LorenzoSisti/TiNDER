@@ -10,7 +10,7 @@ library(readr)
 library(purrr)
 
 ### Setting paths and directories ###
-work_dir <- "/Users/lorenzosisti/Downloads/non_redundant_lorenzo" # Main directory
+work_dir <- "/path/to/your/work/directory/" # Main directory
 imgt_dir <- file.path(work_dir, "imgt") # This directory contains the imgt-named structure collection downloaded from SabDAb 
 unique_bound_dir <- file.path(work_dir, "unique_bound") # This directory contains unique, bound PDB structured with renamed chains (H, L, A)
 dest_dir <- file.path(work_dir, "non_redundant_complete") # Destination directory of all the filtering process
@@ -36,7 +36,7 @@ filter_dataset <- function(pdb, Hchain, Lchain, antigen_chain) {
   file_path <- file.path(imgt_dir, paste0(pdb, ".pdb")) # Define the PDB path
   
   if (!file.exists(file_path)) {
-    message("File non trovato: ", file_path)
+    message("File not found: ", file_path)
     return(NULL)
   }
   
@@ -116,7 +116,7 @@ colnames(post_cd_hit_pdb) <- "pdb" # Rename the PDB column
 
 ### Load the tsv file downloaded from SAbDAb with the collection of bound Ab:::Ag complexes that have complete CDRs according to IMGT nomenclature
 ### https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/cdrsearch/?CDRdef=IMGT&CDRtype=All&completeCDR=Complete&CDRlength=&agtype=All&method=All&species=All&resolution=&rfactor=&ltype=All&CDRseq=#downloads
-complete_cdrs <- read_tsv("/Users/lorenzosisti/Downloads/complete_cdrs_imgt_summary.tsv")
+complete_cdrs <- read_tsv((file.path(work_dir, "complete_cdrs_imgt_summary.tsv")))
 
 pdb_ids <- intersect(post_cd_hit_pdb$pdb, complete_cdrs$pdb)
 
@@ -130,6 +130,6 @@ for (pdb_id in pdb_ids) {
   if (file.exists(source_path)) {
     file.copy(from = source_path, to = destination_path, overwrite = FALSE)
   } else {
-    message("File non trovato: ", pdb_filename)
+    message("File not found: ", pdb_filename)
   }
 }
