@@ -1,3 +1,6 @@
+### Script that is used to run the .xml ROSETTASCRIPT to calculate the electrostatic complementarity at the Ab:::Ag interface ###
+### https://docs.rosettacommons.org/docs/latest/scripting_documentation/RosettaScripts/xsd/simple_metric_ElectrostaticComplementarityMetric_type ###
+
 import subprocess
 import os
 
