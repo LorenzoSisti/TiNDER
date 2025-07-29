@@ -1,3 +1,6 @@
+### Script that is used to run the .xml ROSETTASCRIPT to calculate the shape complementarity at the Ab:::Ag interface ###
+### https://docs.rosettacommons.org/docs/latest/scripting_documentation/RosettaScripts/Filters/filter_pages/ShapeComplementarityFilter ###
+
 import subprocess
 import os
 
