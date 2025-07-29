@@ -1,0 +1,36 @@
+<!-- This is a RosettaScripts XML file that defines a protocol to calculate the electrostatic complementarity
+between an antibody and its antigen using the ElectrostaticComplementarityMetric function.
+
+The antibody is defined as residues in chains 'H' or 'L', while anything else is considered the antigen. -->
+
+<ROSETTASCRIPTS>
+
+	<RESIDUE_SELECTORS>
+        <Chain name="heavy" chains="H"/>
+        <Chain name="light" chains="L"/>
+        <Or name="antibody" selectors="heavy,light"/>
+        <Not name="antigen">
+            <Chain chains="H,L"/>
+        </Not>
+	</RESIDUE_SELECTORS>
+
+<!--The ElectrostaticComplementarityMetric calculates the electrostatic complementarity between two residue selections.
+	It belongs to the category "SIMPLE_METRICS" in RosettaScripts. -->
+
+	<SIMPLE_METRICS>
+		<ElectrostaticComplementarityMetric name="elec" residue_selector1="antibody" residue_selector2="antigen" report_all_ec="0" />
+	</SIMPLE_METRICS>
+
+	<FILTERS>
+        <SimpleMetricFilter name="electrostatic_complementarity" metric="elec" composite_action="avg"/> 
+	</FILTERS>
+
+	<MOVERS>
+        <RunSimpleMetrics name="elec" metrics="elec" /> 
+	</MOVERS>
+
+	<PROTOCOLS>
+		<Add mover_name="elec"/>
+	</PROTOCOLS>
+	<OUTPUT />
+</ROSETTASCRIPTS>

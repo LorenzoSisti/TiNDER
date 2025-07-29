@@ -1,0 +1,31 @@
+<!-- This is a RosettaScripts XML file that defines a protocol to calculate the shape complementarity
+between an antibody and its antigen using the ShapeComplementarity function.
+
+The antibody is defined as residues in chains 'H' or 'L', while anything else is considered the antigen.-->
+
+<ROSETTASCRIPTS>
+
+<!-- To select the residues, I specify that the antibody chain must be named 'H' or 'L'.
+Anything that is not H or L will be considered the antigen. -->
+
+	<RESIDUE_SELECTORS>
+        <Chain name="heavy" chains="H"/>
+        <Chain name="light" chains="L"/>
+        <Or name="antibody" selectors="heavy,light"/>
+        <Not name="antigen">
+            <Chain chains="H,L"/>
+        </Not>
+	</RESIDUE_SELECTORS>
+
+<!-- The ShapeComplementarity function calculates the shape complementarity between two residue selections.
+It belongs to the 'FILTERS' category in RosettaScripts. -->
+
+	<FILTERS>
+        <ShapeComplementarity name="sc" residue_selector1="antibody" residue_selector2="antigen" write_int_area="TRUE"/>   
+	</FILTERS>
+
+	<PROTOCOLS>
+        <Add filter="sc" /> <!-- This will add the filter to the protocol -->
+	</PROTOCOLS>
+	<OUTPUT />
+</ROSETTASCRIPTS>
