@@ -1,3 +1,6 @@
+### THIS SCRIPT EXTRACTS TOPOLOGICAL, GEOMETRIC, AND NUMERIC DESCRIPTORS FROM ANTIBODY–ANTIGEN INTERFACES BASED ON PDB STRUCTURES ###
+### OUTPUT IS A SINGLE CSV FILE CONTAINING AVERAGE DESCRIPTORS PER COMPLEX ###
+
 ### Libraries ###
 library(bio3d)
 library(dplyr)
@@ -48,7 +51,7 @@ compute_graph_energy <- function(df, cutoff) {
   list(energy = sum(eig$values), adj = adj)
 }
 
-#Function to process each PDB file in the pdbL list
+# Function to process each PDB file in the pdbL list
 process_pdb_file <- function(s) {
   tryCatch({
     cat("Elaborating:", pdbL[s], "\n")
