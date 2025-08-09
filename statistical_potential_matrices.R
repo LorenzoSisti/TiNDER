@@ -10,7 +10,7 @@ library(ggplotify)
 
 ### Setting paths, directories and global variables ###
 pdb_dir <- "/path/to/your/non/redundant/pdb/files/directory/"
-results_dir <- "/path/to/the/directory/where/you/want/to/save/the/matrices/"
+results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
 
 DistCutoff <- 8.5      # distance cutoff (in Å) to define a contact between residues
 Nsteps <- 3            # number of radial rings (shells)
@@ -46,9 +46,9 @@ heatmap_asym_plots <- list()
 heatmap_sym_plots <- list()
 
 ### Load saved data ###
-contact_matrix <- readRDS(file.path(results_dir, "name_of_the_contact_matrix.rds"))
-residue_counts_interface_ab <- readRDS(file.path(results_dir, "name_of_the_residue_counts_file_ab.rds"))
-residue_counts_interface_ligando <- readRDS(file.path(results_dir, "name_of_the_residue_counts_file_ag.rds"))
+contact_matrix <- readRDS(file.path(results_dir, "contact_matrix_rings.rds"))
+residue_counts_interface_ab <- readRDS(file.path(results_dir, "residue_counts_interface_ab.rds"))
+residue_counts_interface_ligando <- readRDS(file.path(results_dir, "residue_counts_interface_ligand_df.rds"))
 
 # Compute statistical potentials for each radial ring
 for (step in 1:Nsteps) {
