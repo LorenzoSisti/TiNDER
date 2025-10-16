@@ -1,2 +1,2 @@
 # MSc Thesis internship: Native-like Docking poses Evaluation & Ranking
-A protocol for scoring native-like docking poses through statistical potentials, graph theory and linear algebra, developed during my MSc thesis internship at the [Center for Life Nano- & Neuro-Science](https://www.iit.it/it/clns-sapienza).
+A protocol for scoring native-like docking poses through statistical potentials, graph theory and linear algebra, developed during my MSc thesis internship at the [Center for Life Nano- & Neuro-Science](https://www.iit.it/it/clns-sapienza) of the Italian Institute of Technology (IIT), under the supervision of [Edoardo Milanetti](https://scholar.google.it/citations?user=Pc8OAWsAAAAJ&hl=it).
