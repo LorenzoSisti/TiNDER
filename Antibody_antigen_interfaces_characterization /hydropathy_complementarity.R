@@ -18,10 +18,9 @@ handlers(global = TRUE)
 handlers("rstudio")
 
 ### Setting paths, directories and global variables ###
-#pdb_dir <- "/path/to/your/non/redundant/pdb/files/directory/"
-#files_dir <- "/path/to/the/directory/where/you/want/to/save/the/scores/"
-pdb_dir <- "/Path/to/the/directory/containing/PDB/files/"
-files_dir <- "//"
+pdb_dir <- "/path/to/your/non/redundant/pdb/files/directory/"
+files_dir <- "/path/to/the/directory/where/you/want/to/save/the/scores/"
+
 DistCutoff <- 8.5  # Two residues are defined as "in contact" if the centroids of their side chain are at less than 8.5 Angstroms
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
@@ -31,7 +30,7 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 ### MAIN ###
 
 Hr_complementarity <- hydropathy_complementarity_matrix(
-  milanetti_scale_path = "/Users/lorenzosisti/Documents/Milanetti_lab_rot/files/MilanettiScale.csv",
+  milanetti_scale_path = "/Path/to/the/hydrophobicity/scale/MilanettiScale.csv",
   amino_acids = amino_acids
 )
 
