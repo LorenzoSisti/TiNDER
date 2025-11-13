@@ -16,8 +16,18 @@ pdbfixer PDB_ID.pdb --replace-nonstandard --add-residues --keep-heterogens=all -
 
 ### Rpair?
 
-Vedremo se metterlo o meno...
+Vedremo se metterlo o meno... NON L'HO MESSO TANTO CAMBIA POCO
 
 ## Docking - HADDOCK
 
 Work in progress...
+
+## Docking - HDOCK
+
+Work in progress...
+
+## Docking - ALPHAFOLD 3
+
+Work in progress...
+
+
