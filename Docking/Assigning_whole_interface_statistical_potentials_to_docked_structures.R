@@ -21,7 +21,7 @@ plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
 pdb_dir <- "/path/to/your/docked/structures/files/directory/"
-results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
+results_dir <- "/path/to/the/directory/where/you/want/to/save/the/potential/scores/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
