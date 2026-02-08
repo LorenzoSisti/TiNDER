@@ -11,6 +11,8 @@ Developing an effective strategy for screening predicted antibody-antigen comple
 
 ### Computing_statistical_potential_matrices
 
+This directory contains the computational pipeline necessary to compute knowledge-based statistical potentials for each predicted antibody antigen complex generated via the pipeline contained in the `Docking` directory.
+
 ### Docking
 
 ### Statistical_potential_performances_saturation
