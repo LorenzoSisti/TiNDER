@@ -7,7 +7,7 @@ Developing an effective strategy for screening predicted antibody-antigen comple
 
 ## Git repository organization
 
-The `SabDAb_database_filtering.R` script takes as input the entire antibody-antigen complexes present in the Protein Data Bank and downloaded from SabDAb, renumbered according to the *Chothia* scheme.
+The `SabDAb_database_filtering.R` script takes as input the entire antibody-antigen complexes present in the Protein Data Bank and downloaded from SabDAb, renumbered according to the *Chothia* scheme. This script needs to be heavily revised, as the one effectively used for 
 
 ### Antibody_antigen_interfaces_characterization
 
