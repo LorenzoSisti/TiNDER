@@ -21,13 +21,14 @@ cat("Processori usati:", nbrOfWorkers(), "\n")
 ### --- 2. DEFINIZIONE DEI PERCORSI (INPUT E OUTPUT) --- ###
 
 # Input 1: La cartella con le LISTE dei potenziali da usare (da Blocco 5)
-potentials_list_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/potenziali_selezionati_liste/"
+potentials_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/potenziali_statistici_stratificati/"
 
 # Input 2: La cartella con le 22.000 POSE DI DOCKING da analizzare
-pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
+#pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
 
 # Output: La cartella dove salvare i 40 file CSV di risultati
-results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/risultati_scoring_finale_HDOCK/"
+results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Parametri globali
@@ -187,81 +188,57 @@ calculate_pose_score <- function(pdb_path, V_potential_df, potential_type) {
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 cat("Trovate", length(all_docked_pdbs), "pose PDB da analizzare.\n")
 
-# Input 2: Lista dei 20 file .txt che puntano ai 40 potenziali
-potential_list_files <- list.files(potentials_list_dir, pattern = "\\.txt$", full.names = TRUE)
-cat("Trovati", length(potential_list_files), "file di liste di potenziali da processare.\n")
+# Input 2: Troviamo direttamente tutti i file .rds dei potenziali
+potential_rds_paths <- list.files(potentials_dir, 
+                                  pattern = "potentials_(sym|asym)_wide\\.rds$", 
+                                  recursive = TRUE, 
+                                  full.names = TRUE)
+cat("Trovati", length(potential_rds_paths), "file di potenziali da processare.\n")
 
-# Inizia il ciclo esterno (sui 20 file .txt)
-for (list_file_path in potential_list_files) {
+# Ciclo unico su tutti i potenziali
+for (potential_path in potential_rds_paths) {
   
-  potential_rds_paths <- readLines(list_file_path)
+  # --- A. PREPARAZIONE ---
+  type_tag <- if (str_detect(basename(potential_path), "asym")) "asym" else "sym"
   
-  # Inizia il ciclo interno (sui 2 percorsi .rds per file .txt)
-  for (potential_path in potential_rds_paths) {
-    
-    # --- A. PREPARAZIONE ---
-    
-    # Controlla se il file di output esiste GIA'. Se sì, SALTA.
-    # Questo rende lo script "resumable"
-    type_tag <- if (str_detect(potential_path, "sym")) "sym" else "asym"
-    
-    # Crea un ID unico per il file di output
-    # es: seed_101_split_2_group_1_sym
-    # --- NUOVO BLOCCO DI ESTRAZIONE ID ---
-    # 1. Estrai il numero di seed
-    seed_tag <- str_extract(potential_path, "seed_\\d+") 
-    
-    # 2. Estrai il numero di split
-    split_tag <- str_extract(potential_path, "split_\\d+")
-    
-    # 3. Estrai il numero di group
-    group_tag <- str_extract(potential_path, "group_\\d+")
-    
-    # 4. Unisci i pezzi in un unico ID (es: seed_123_split_3_group_1)
-    # Uso 'paste' per unire i frammenti estratti
-    id_tag <- paste(seed_tag, split_tag, group_tag, sep = "_")
-    # --- FINE NUOVO BLOCCO DI ESTRAZIONE ID ---
-    
-    # Il resto del tuo codice per il filename:
-    output_filename <- paste0("scores_", id_tag, "_", type_tag, ".csv")
-    output_filepath <- file.path(results_dir, output_filename)
-    
-    if (file.exists(output_filepath)) {
-      cat("--- SALTO:", output_filename, "(già calcolato) ---\n")
-      next # Salta al prossimo potenziale
-    }
-    
-    cat("--- INIZIO CALCOLO PER:", output_filename, "---\n")
-    
-    # Carica il potenziale (es. V_sym_wide per questo ciclo)
-    V_potential_df <- readRDS(potential_path)
-    
-    # --- B. ESECUZIONE PARALLELA (su 22.000 PDB) ---
-    
-    summary_results <- future_map_dfr(
-      all_docked_pdbs,
-      function(pdb_path) {
-        
-        # Esegui la funzione di scoring
-        res <- calculate_pose_score(pdb_path, V_potential_df, type_tag)
-        
-        # Restituisci un dataframe riga
-        data.frame(
-          pdb = basename(pdb_path),
-          sum_potential = res$total_potential,
-          mean_potential = res$mean_potential
-        )
-      },
-      .progress = TRUE, # Mostra la barra di progresso
-      .options = furrr_options(seed = TRUE)
-    )
-    
-    # --- C. SALVATAGGIO ---
-    
-    write.csv(summary_results, file = output_filepath, row.names = FALSE)
-    cat("--- SALVATO:", output_filename, "---\n")
-    
-  } # Fine ciclo interno (percorsi .rds)
-} # Fine ciclo esterno (file .txt)
+  # Estrai ID dal percorso (es: seed_123_split_3_group_1)
+  seed_tag <- str_extract(potential_path, "seed_\\d+") 
+  split_tag <- str_extract(potential_path, "split_\\d+")
+  group_tag <- str_extract(potential_path, "group_\\d+")
+  id_tag <- paste(seed_tag, split_tag, group_tag, sep = "_")
+  
+  output_filename <- paste0("scores_", id_tag, "_", type_tag, ".csv")
+  output_filepath <- file.path(results_dir, output_filename)
+  
+  if (file.exists(output_filepath)) {
+    cat("--- SALTO:", output_filename, "(già calcolato) ---\n")
+    next 
+  }
+  
+  cat("--- INIZIO CALCOLO PER:", output_filename, "---\n")
+  
+  # Carica il potenziale
+  V_potential_df <- readRDS(potential_path)
+  
+  # --- B. ESECUZIONE PARALLELA (su 22.000 PDB) ---
+  summary_results <- future_map_dfr(
+    all_docked_pdbs,
+    function(pdb_path) {
+      res <- calculate_pose_score(pdb_path, V_potential_df, type_tag)
+      data.frame(
+        pdb = basename(pdb_path),
+        sum_potential = res$total_potential,
+        mean_potential = res$mean_potential
+      )
+    },
+    .progress = TRUE, 
+    .options = furrr_options(seed = TRUE)
+  )
+  
+  # --- C. SALVATAGGIO ---
+  write.csv(summary_results, file = output_filepath, row.names = FALSE)
+  cat("--- SALVATO:", output_filename, "---\n")
+  
+} 
 
-cat("--- BLOCCO 6: FINITO! Tutti i 40 potenziali sono stati processati. ---\n")
+cat("--- BLOCCO 6: FINITO! Tutti i", length(potential_rds_paths), "potenziali sono stati processati. ---\n")
