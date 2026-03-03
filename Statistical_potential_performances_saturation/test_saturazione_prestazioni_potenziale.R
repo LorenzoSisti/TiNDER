@@ -23,7 +23,7 @@ DistCutoff <- 8.5
 amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
 
-results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali"
+results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo"
 dir.create(results_dir, showWarnings = FALSE)
 
 seed_list <- c(101, 123, 202, 303, 404, 505, 606, 707, 808, 909)
@@ -88,24 +88,43 @@ for (i in seq_along(seed_list)) {
 ### SECONDO BLOCCO DI CODICE: CALCOLARE LE MATRICI DI CONTATTO WHOLE-INTERFACE ###
 ################################################################################
 
-# --- 1. Definiamo chiaramente le cartelle di IN e OUT ---
+# --- 2. Troviamo i file .txt e CAMPIONIAMO 10 GRUPPI PER SPLIT ---
+list_files_all <- list.files(list_base_dir, 
+                             pattern = "^group_.*\\.txt$", 
+                             recursive = TRUE, 
+                             full.names = TRUE)
 
-# Questa è la cartella DOVE IL BLOCCO 1 HA SALVATO LE LISTE .txt
-list_base_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali"
+cat("Trovati inizialmente", length(list_files_all), "file di gruppi (.txt) totali.\n")
 
-# Questa è la cartella DOVE VOGLIAMO SALVARE LE MATRICI FINALI
-matrix_output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/contact_matrices_dir/"
-dir.create(matrix_output_dir, showWarnings = FALSE)
+# Creiamo un dataframe per manipolare facilmente i percorsi
+library(dplyr)
+library(stringr)
 
-set.seed(1234) # Per la riproducibilità
+files_df <- tibble(file_path = list_files_all) %>%
+  # Estraiamo il nome dello split dal percorso (es. "split_2", "split_144")
+  mutate(split_name = str_extract(file_path, "split_\\d+"))
 
-# --- 2. Troviamo i file .txt, non le cartelle ---
-list_files <- list.files(list_base_dir, 
-                         pattern = "^group_.*\\.txt$", 
-                         recursive = TRUE, 
-                         full.names = TRUE)
+set.seed(1234) # Fondamentale per far sì che estragga sempre gli stessi 10 se rilanci lo script
 
-cat("Trovati", length(list_files), "file di gruppi (.txt) da processare.\n")
+# Raggruppiamo per split ed estraiamo 10 file a caso per ciascuno
+sampled_files_df <- files_df %>%
+  group_by(split_name) %>%
+  # Estrae randomicamente 10 righe (se ce ne sono meno di 10, le prende tutte)
+  slice_sample(n = 10) %>% 
+  ungroup()
+
+# Sovrascriviamo list_files con la nostra nuova lista filtrata
+list_files <- sampled_files_df$file_path
+
+cat("Dopo il campionamento, processeremo", length(list_files), "file in totale (10 random per ogni split).\n")
+
+# Mostriamo un rapido riassunto di quanti file per split stiamo processando per sicurezza
+print(table(sampled_files_df$split_name))
+
+# --- FINE MODIFICA ---
+
+# Definiamo una funzione generale per elaborare ogni file PDB...
+# (Il resto del codice da 'compute_whole_int_statistical_potential_saturation <- function...' rimane identico)
 
 
 # Definiamo una funzione generale per elaborare ogni file PDB
@@ -293,8 +312,8 @@ cat("Finito!\n")
 ################################################################################
 
 ### Directories and global variables
-base_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/contact_matrices_dir/"
-output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/potenziali_statistici_whole_interface/"
+base_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/contact_matrices_dir/"
+output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/potenziali_statistici_whole_interface/"
 dir.create(output_dir, showWarnings = FALSE)
 
 amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
@@ -401,55 +420,67 @@ write.csv(emi_sums, file = file.path(output_dir, "emi_matrix_sums.csv"), row.nam
 ### TERZO BLOCCO DI CODICE: CALCOLARE LE MATRICI DI CONTATTO RADIALI ###
 ################################################################################
 
+library(bio3d)
+library(dplyr)
+library(purrr)
+library(furrr)
+library(stringr)
+
 # --- 1. Definiamo le cartelle di IN e OUT per questo blocco ---
-
-# Input: Le liste .txt create dal Blocco 1
-# (usiamo la STESSA cartella di base dei blocchi precedenti)
-list_base_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali"
-
-# Output: Una NUOVA cartella per i risultati radiali (stratificati)
-radial_matrix_output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/matrici_stratificate/"
+list_base_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo"
+radial_matrix_output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/matrici_stratificate/"
 dir.create(radial_matrix_output_dir, showWarnings = FALSE)
 
 # --- 2. Parametri specifici per questo blocco ---
-Nsteps <- 3 # Numero di "anelli" concentrici
+Nsteps <- 3
 ring_pairs <- c("1-1", "2-2", "3-3", "1-2", "2-3", "1-3")
+DistCutoff <- 8.5 
+amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
 
-# --- 3. Troviamo i file .txt da processare ---
-# (Questo è lo stesso elenco del Blocco 2)
-list_files_to_process <- list.files(list_base_dir, 
-                                    pattern = "^group_.*\\.txt$",
-                                    recursive = TRUE, 
-                                    full.names = TRUE)
+# --- 3. Troviamo i file .txt e CAMPIONIAMO 10 GRUPPI PER SPLIT ---
+list_files_all <- list.files(list_base_dir, 
+                             pattern = "^group_.*\\.txt$", 
+                             recursive = TRUE, 
+                             full.names = TRUE)
 
 cat("\n--- BLOCCO 3 INIZIATO ---\n")
-cat("Trovati", length(list_files_to_process), "file di gruppi (.txt) da processare per analisi RADIALE.\n")
+cat("Trovati inizialmente", length(list_files_all), "file di gruppi (.txt) totali.\n")
+
+files_df <- tibble(file_path = list_files_all) %>%
+  mutate(split_name = str_extract(file_path, "split_\\d+"))
+
+set.seed(1234) # Usa lo stesso seed dell'altro script
+
+sampled_files_df <- files_df %>%
+  group_by(split_name) %>%
+  slice_sample(n = 10) %>% 
+  ungroup()
+
+list_files_to_process <- sampled_files_df$file_path
+
+cat("Dopo il campionamento, processeremo", length(list_files_to_process), "file in totale (10 random per ogni split).\n")
 
 # --- 4. Strutture di base per l'inizializzazione ---
 base_matrix_20x20 <- matrix(0, nrow = 20, ncol = 20, dimnames = list(amino_acids, amino_acids))
 base_vector_20 <- setNames(rep(0, length(amino_acids)), amino_acids)
 
-
-# --- 5. Funzione di processamento PDB (adattata dal tuo snippet) ---
+# --- 5. Funzione di processamento PDB ---
 process_pdb_radial <- function(pdb_path) {
   tryCatch({
     
-    # --- I/O e setup (MODIFICATO: usa pdb_path) ---
     pdb_aus <- read.pdb(pdb_path) 
     chain_HL <- c("H", "L")
     chain_AG <- "A"
     
-    # --- Coarse-graining (dal tuo snippet) ---
+    # Coarse-graining
     df_coord <- pdb_aus$atom[pdb_aus$atom$type != "HETATM" & (
       (pdb_aus$atom$resid != "GLY" & !(pdb_aus$atom$elety %in% c("N", "CA", "C", "O"))) |
         (pdb_aus$atom$resid == "GLY" & pdb_aus$atom$elety == "CA")),]
     
-    if (nrow(df_coord) == 0) {
-      # MODIFICATO: return con 'ok = FALSE'
-      return(list(ok = FALSE, error = paste("df_coord vuoto:", pdb_path)))
-    }
+    if (nrow(df_coord) == 0) return(list(ok = FALSE, error = paste("df_coord vuoto:", pdb_path)))
     
-    # --- Renumbering (dal tuo snippet) ---
+    # Renumbering
     df_coord_corrected <- df_coord
     corrected_dfs <- list()
     for (chain in unique(df_coord_corrected$chain)) {
@@ -462,7 +493,7 @@ process_pdb_radial <- function(pdb_path) {
     }
     df_coord_corrected <- do.call(rbind, corrected_dfs)
     
-    # --- Calcolo Centroidi (dal tuo snippet) ---
+    # Calcolo Centroidi
     centroids_df <- as.data.frame(
       df_coord_corrected %>%
         group_by(chain, resno, resid) %>%
@@ -473,7 +504,7 @@ process_pdb_radial <- function(pdb_path) {
     rownames(df_coord_resid_xyz) <- res_names
     DistMat <- as.matrix(dist(df_coord_resid_xyz[, c("x", "y", "z")])) 
     
-    # --- Definizione Interfaccia e Anelli (dal tuo snippet) ---
+    # Definizione Interfaccia e Anelli
     condA <- !(centroids_df$chain %in% chain_HL)
     condHL <- centroids_df$chain %in% chain_HL
     
@@ -486,22 +517,21 @@ process_pdb_radial <- function(pdb_path) {
     BS_HL <- BS_HL[BS_HL != 0]
     
     if (length(BS_A) == 0 || length(BS_HL) == 0) {
-      # MODIFICATO: return con 'ok = FALSE'
       return(list(ok = FALSE, error = paste("Interfaccia vuota (BS_A o BS_HL è 0):", pdb_path)))
     }
     
     BS_A_names <- names(BS_A)
     BS_HL_names <- names(BS_HL)
     
-    # --- Logica degli anelli (dal tuo snippet) ---
+    # Logica degli anelli
     df_centroids_BS <- df_coord_resid_xyz[rownames(df_coord_resid_xyz) %in% c(BS_A_names, BS_HL_names), ]
     center_BS <- colMeans(df_centroids_BS[, c("x", "y", "z")])
     DistMat_centroid <- as.matrix(dist(rbind(df_centroids_BS[, c("x", "y", "z")], center_BS)))
     vet_dist_centroid <- DistMat_centroid[-nrow(DistMat_centroid), ncol(DistMat_centroid)]
     r_max <- max(vet_dist_centroid)
-    borders <- c(0, 0.37, 0.64, 1) * r_max 
+    borders <- c(0, 0.37, 0.64, 1.01) * r_max # CORREZIONE 1: 1.01 per sicurezza
     
-    # --- Assegnazione contatti e anelli (dal tuo snippet) ---
+    # Assegnazione contatti e anelli
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
     contacts <- data.frame(
       res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]],
@@ -514,7 +544,7 @@ process_pdb_radial <- function(pdb_path) {
     contacts$ring_res1 <- sapply(contacts$dist_res1_centroid, assign_ring)
     contacts$ring_res2 <- sapply(contacts$dist_res2_centroid, assign_ring)
     
-    # --- Inizializzazione strutture LOCALI (per questo PDB) ---
+    # Inizializzazione strutture LOCALI
     local_matrices_asym <- setNames(vector("list", length(ring_pairs)), ring_pairs)
     local_matrices_sym <- setNames(vector("list", length(ring_pairs)), ring_pairs)
     for (pair in ring_pairs) {
@@ -529,7 +559,7 @@ process_pdb_radial <- function(pdb_path) {
       local_ag_counts[[step]] <- base_vector_20
     }
     
-    # --- Riempimento matrici di contatto (dal tuo snippet) ---
+    # Riempimento matrici di contatto
     for (k in seq_len(nrow(contacts))) {
       aa1 <- strsplit(contacts$res1[k], "_")[[1]][1]
       aa2 <- strsplit(contacts$res2[k], "_")[[1]][1]
@@ -562,22 +592,26 @@ process_pdb_radial <- function(pdb_path) {
       }
     }
     
-    # --- Conteggio residui per anello (dal tuo snippet) ---
+    # Conteggio residui per anello
     for (step in 1:Nsteps) {
       r_start <- borders[step]
       r_end <- borders[step + 1]
       selected_residues <- names(vet_dist_centroid[vet_dist_centroid >= r_start & vet_dist_centroid < r_end])
+      
       centroids_df$residue_key <- paste(centroids_df$resid, centroids_df$resno, centroids_df$chain, sep = "_")
       df_selected <- centroids_df[centroids_df$residue_key %in% selected_residues, ]
       
       df_selected_antibody_df <- df_selected[df_selected$chain %in% chain_HL, ]
       df_selected_ligand_df <- df_selected[df_selected$chain %in% chain_AG, ]
       
-      local_ab_counts[[step]] <- local_ab_counts[[step]] + table(factor(df_selected_antibody_df$resid, levels = amino_acids))
-      local_ag_counts[[step]] <- local_ag_counts[[step]] + table(factor(df_selected_ligand_df$resid, levels = amino_acids))
+      t_ab <- table(factor(df_selected_antibody_df$resid, levels = amino_acids))
+      t_ag <- table(factor(df_selected_ligand_df$resid, levels = amino_acids))
+      
+      # CORREZIONE 2: as.numeric per evitare problemi di nomi sfalsati
+      local_ab_counts[[step]] <- local_ab_counts[[step]] + as.numeric(t_ab)
+      local_ag_counts[[step]] <- local_ag_counts[[step]] + as.numeric(t_ag)
     }
     
-    # --- Return (MODIFICATO: con ok = TRUE) ---
     return(list(
       ok = TRUE,
       matrices_asym = local_matrices_asym, 
@@ -587,41 +621,34 @@ process_pdb_radial <- function(pdb_path) {
     ))
     
   }, error = function(e) {
-    # MODIFICATO: return con 'ok = FALSE' e log dettagliato
     return(list(ok = FALSE, error = paste("Errore PDB:", pdb_path, "Msg:", e$message)))
   })
 }
 
-
-# --- 6. Ciclo principale, aggregazione e salvataggio (MODIFICATO) ---
-# Itera su ogni file "group_...txt"
+# --- 6. Ciclo principale, aggregazione e salvataggio ---
 for (list_file_path in list_files_to_process) {
   
-  cat("Processando gruppo RADIALE (da lista):", list_file_path, "\n")
+  cat("\nProcessando gruppo RADIALE (da lista):", list_file_path, "\n")
   
-  # Leggi la lista di PDB per questo gruppo
   pdb_files <- readLines(list_file_path)
-  pdb_files <- pdb_files[pdb_files != ""] # Rimuovi righe vuote
+  pdb_files <- pdb_files[pdb_files != ""] 
   
   if (length(pdb_files) == 0) {
     cat("   ... Lista vuota, salto.\n")
     next
   }
   
-  # Esegui l'analisi radiale in parallelo
-  results_list <- future_map(pdb_files, process_pdb_radial, .progress = TRUE)
+  # CORREZIONE 3: furrr_options(seed = TRUE) aggiunto
+  results_list <- future_map(pdb_files, process_pdb_radial, .progress = TRUE, .options = furrr_options(seed = TRUE))
   
-  # Separa successi e fallimenti
   valid_results <- keep(results_list, ~ .x$ok)
   failed <- keep(results_list, ~ !.x$ok)
   
-  # --- Creazione cartella di output (come Blocco 2) ---
   relative_path <- gsub(paste0("^", list_base_dir, "/"), "", list_file_path)
   output_rel_dir <- gsub("\\.txt$", "", relative_path)
-  out_dir <- file.path(radial_matrix_output_dir, output_rel_dir) # Usa la nuova dir di output
+  out_dir <- file.path(radial_matrix_output_dir, output_rel_dir) 
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   
-  # Salva log degli errori
   if (length(failed) > 0) {
     error_messages <- map_chr(failed, "error")
     writeLines(error_messages, file.path(out_dir, "errors.log"))
@@ -629,12 +656,10 @@ for (list_file_path in list_files_to_process) {
   
   if (length(valid_results) == 0) {
     cat("   ... Nessun risultato RADIALE valido. Creato file di log.\n")
-    next # Salta al prossimo gruppo
+    next 
   }
   
-  # --- INIZIO: Aggregazione specifica per questo gruppo ---
-  
-  # 1. Inizializza le strutture SOMMA per questo GRUPPO
+  # 1. Inizializza le strutture SOMMA
   group_sum_asym <- setNames(vector("list", length(ring_pairs)), ring_pairs)
   group_sum_sym <- setNames(vector("list", length(ring_pairs)), ring_pairs)
   for (pair in ring_pairs) {
@@ -649,7 +674,7 @@ for (list_file_path in list_files_to_process) {
     group_sum_ag_counts[[step]] <- base_vector_20
   }
   
-  # 2. Aggrega i risultati (somma i risultati di ogni PDB valido)
+  # 2. Aggrega i risultati
   for (res in valid_results) {
     for (pair in ring_pairs) {
       group_sum_asym[[pair]] <- group_sum_asym[[pair]] + res$matrices_asym[[pair]]
@@ -661,24 +686,19 @@ for (list_file_path in list_files_to_process) {
     }
   }
   
-  # --- FINE: Aggregazione ---
-  
-  # --- Salvataggio (logica dallo snippet, ma dentro il loop) ---
-  
-  # Salva gli oggetti RDS (liste complete per il gruppo)
+  # --- Salvataggio ---
   saveRDS(group_sum_asym, file = file.path(out_dir, "contact_matrices_asym_rings.rds"))
   saveRDS(group_sum_sym, file = file.path(out_dir, "contact_matrices_sym_rings.rds"))
   saveRDS(group_sum_ab_counts, file = file.path(out_dir, "residue_counts_interface_ab.rds"))
-  saveRDS(group_sum_ag_counts, file = file.path(out_dir, "residue_counts_interface_ligand_df.rds"))
+  saveRDS(group_sum_ag_counts, file = file.path(out_dir, "residue_counts_interface_ligand.rds"))
   
-  # Salva i CSV individuali per una facile ispezione
   for (pair in ring_pairs) {
     write.csv(group_sum_asym[[pair]], file = file.path(out_dir, paste0("contact_matrices_asym_rings_", pair, ".csv")), row.names = TRUE)
     write.csv(group_sum_sym[[pair]], file = file.path(out_dir, paste0("contact_matrices_sym_rings_", pair, ".csv")), row.names = TRUE)
   }
   for (step in 1:Nsteps) {
     write.csv(group_sum_ab_counts[[step]], file = file.path(out_dir, paste0("residue_counts_interface_ab_step", step, ".csv")), row.names = TRUE)
-    write.csv(group_sum_ag_counts[[step]], file = file.path(out_dir, paste0("residue_counts_interface_ligand_df_step", step, ".csv")), row.names = TRUE)
+    write.csv(group_sum_ag_counts[[step]], file = file.path(out_dir, paste0("residue_counts_interface_ligand_step", step, ".csv")), row.names = TRUE)
   }
   
   cat("   ... Salvataggio RADIALE completato in:", out_dir, "\n")
@@ -693,10 +713,10 @@ cat("--- BLOCCO 3: Finito! ---\n")
 # --- 1. Definiamo le cartelle di IN e OUT per questo blocco ---
 
 # Input: La cartella di output del Blocco 3, che contiene TUTTI i gruppi
-radial_input_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/matrici_stratificate/"
+radial_input_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/matrici_stratificate/"
 
 # Output: Una NUOVA cartella per i potenziali statistici
-potential_output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/potenziali_statistici_stratificati/"
+potential_output_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/potenziali_statistici_stratificati/"
 dir.create(potential_output_dir, showWarnings = FALSE)
 
 # --- 2. Parametri globali e funzioni (dallo snippet) ---
@@ -735,7 +755,7 @@ to_asym_df <- function(files) {
     
     aa1  <- rep(rownames(mat), times = ncol(mat))
     aa2  <- rep(colnames(mat), each  = nrow(mat))
-    pair <- paste(aa1, "→", aa2) # Usiamo "→" come nello snippet
+    pair <- paste(aa1, "_to_", aa2) # Usiamo "_to_" come nello snippet
     
     pair_name <- sub("\\.csv$", "", basename(files[i]))
     pair_name <- sub("^V_(sym|asym)_", "", pair_name)
@@ -778,7 +798,7 @@ for (marker_file in group_marker_files) {
     contact_matrix_sym <- readRDS(file.path(group_input_dir, "contact_matrices_sym_rings.rds"))
     contact_matrix_asym <- readRDS(file.path(group_input_dir, "contact_matrices_asym_rings.rds"))
     residue_counts_interface_ab <- readRDS(file.path(group_input_dir, "residue_counts_interface_ab.rds"))
-    residue_counts_interface_ligando <- readRDS(file.path(group_input_dir, "residue_counts_interface_ligand_df.rds"))
+    residue_counts_interface_ligando <- readRDS(file.path(group_input_dir, "residue_counts_interface_ligand.rds"))
     
     # --- B. Calcola frequenze marginali (Snippet Step 1) ---
     paratope_freq <- list()
@@ -862,7 +882,7 @@ for (marker_file in group_marker_files) {
       df_asym_wide <- to_asym_df(asym_files)
       # Completo lo snippet che era interrotto
       df_asym_wide <- df_asym_wide %>%
-        separate(pair, into = c("aa1", "aa2"), sep = " → ") %>%
+        separate(pair, into = c("aa1", "aa2"), sep = " _to_ ") %>%
         relocate(aa1, aa2)
       
       write.csv(df_asym_wide, file.path(group_output_dir, "potentials_asym_wide.csv"), row.names = FALSE)
