@@ -21,9 +21,9 @@ plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
 #pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
-#results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_AF3_prova_strati_opt"
+#results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_AF3_prova_strati_opt_marzo_2"
 pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_HDOCK_prova_strati_opt"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_HDOCK_prova_strati_opt_marzo"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
@@ -118,13 +118,19 @@ assign_sym_gr_pmf_to_docking <- function(pdb_path) {
   
   total_potential <- sum(contacts$potenziale_totale, na.rm = TRUE)
   n_contacts <- nrow(contacts)
+  
+  # Calcolo della percentuale di potenziali uguali a zero
+  n_zero <- sum(contacts$potenziale_totale == 0, na.rm = TRUE)
+  perc_zero <- if (n_contacts > 0) (n_zero / n_contacts) * 100 else NA
+  
   #mean_potential <- total_potential / n_contacts
   mean_potential <- if (n_contacts > 0) total_potential / n_contacts else NA
   
   return(list(
     total_potential = total_potential,
     n_contacts = n_contacts,
-    mean_potential = mean_potential
+    mean_potential = mean_potential,
+    perc_zero = perc_zero
   ))
 }
 
@@ -206,13 +212,19 @@ assign_asym_gr_pmf_to_docking <- function(pdb_path) {
   
   total_potential <- sum(contacts$potenziale_totale, na.rm = TRUE)
   n_contacts <- nrow(contacts)
+  
+  # Calcolo della percentuale di potenziali uguali a zero
+  n_zero <- sum(contacts$potenziale_totale == 0, na.rm = TRUE)
+  perc_zero <- if (n_contacts > 0) (n_zero / n_contacts) * 100 else NA
+  
   #mean_potential <- total_potential / n_contacts
   mean_potential <- if (n_contacts > 0) total_potential / n_contacts else NA
   
   return(list(
     total_potential = total_potential,
     n_contacts = n_contacts,
-    mean_potential = mean_potential
+    mean_potential = mean_potential,
+    perc_zero = perc_zero
   ))
 }
 
@@ -224,31 +236,37 @@ summary_results <- future_map_dfr(
     res_sym  <- assign_sym_gr_pmf_to_docking(pdb_path)
     res_asym <- assign_asym_gr_pmf_to_docking(pdb_path)
     
+    # Se il calcolo fallisce, restituisci NA anche per le nuove colonne
     if (is.null(res_sym) | is.null(res_asym)) {
       return(data.frame(
         pdb = basename(pdb_path),
         sum_sym = NA,
         sum_asym = NA,
         mean_sym = NA,
-        mean_asym = NA
+        mean_asym = NA,
+        perc_zero_sym = NA,       # <--- AGGIUNTO
+        perc_zero_asym = NA       # <--- AGGIUNTO
       ))
     }
     
+    # Se ha successo, estrai il dato calcolato e mettilo nel dataframe
     data.frame(
       pdb = basename(pdb_path),
-      sum_sym  = res_sym$total_potential,
-      sum_asym = res_asym$total_potential,
-      mean_sym = res_sym$mean_potential,
-      mean_asym = res_asym$mean_potential
+      sum_sym   = res_sym$total_potential,
+      sum_asym  = res_asym$total_potential,
+      mean_sym  = res_sym$mean_potential,
+      mean_asym = res_asym$mean_potential,
+      perc_zero_sym  = res_sym$perc_zero,   # <--- AGGIUNTO
+      perc_zero_asym = res_asym$perc_zero   # <--- AGGIUNTO
     )
   },
   .progress = TRUE,
   .options  = furrr_options(seed = TRUE)
 )
 
-# Salva in CSV
-write.csv(summary_results, file = file.path(results_dir, "summary_results_AF3_stratificati_sparse.csv"), 
+# Salva in CSV (rimane invariato, il nuovo df avrà in automatico le 2 nuove colonne)
+write.csv(summary_results, file = file.path(results_dir, "summary_results_HDOCK_stratificati_sparse.csv"), 
           row.names = FALSE)
 
-# Facoltativo: anche in RDS (più efficiente da ricaricare in R)
-saveRDS(summary_results, file = file.path(results_dir, "summary_results_AF3_stratificati_sparse.rds"))
+# Facoltativo: anche in RDS
+saveRDS(summary_results, file = file.path(results_dir, "summary_results_HDOCK_stratificati_sparse.rds"))
