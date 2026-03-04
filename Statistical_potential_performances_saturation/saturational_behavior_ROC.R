@@ -302,3 +302,89 @@ ggsave(
 )
 
 cat("\n=== Plot di controllo della distribuzione salvato ===\n")
+
+# Creiamo l'istogramma con i conteggi assoluti
+p_histogram <- ggplot(df_density, aes(x = sum_potential, fill = Classe)) +
+  # Usiamo bins = 60 (puoi aggiustarlo) e position = "identity" per sovrapporli
+  geom_histogram(position = "identity", alpha = 0.6, color = "black", bins = 60, linewidth = 0.2) +
+  facet_wrap(~ potential_type, scales = "free") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                               "Decoy (Incorrect)" = "firebrick")) +
+  labs(
+    title = "Controllo Bias: Conteggi Assoluti dei Punteggi (Istogramma)",
+    subtitle = "L'asse Y mostra il numero reale di pose, rivelando lo sbilanciamento delle classi.",
+    x = "Sum Potential (Score Grezzo)",
+    y = "Numero di Pose (Count)",
+    fill = "Tipo di Posa"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+
+# Salviamo il plot
+ggsave(
+  filename = file.path(output_dir_saturazione, "Controllo_Istogramma_Punteggi.png"),
+  plot = p_histogram,
+  width = 8, 
+  height = 5, 
+  dpi = 300
+)
+
+cat("\n=== Plot a istogramma salvato! ===\n")
+
+# --- 10. SMASCHERIAMO IL PARADOSSO: ISTOGRAMMA DEGLI Z-SCORE ---
+
+# 1. Calcoliamo lo Z-score usando TUTTE le pose (prima di filtrare per DockQ)
+# Raggruppiamo per 'group_num' (il singolo complesso proteico) e 'potential_type'
+df_zscore <- merged_check %>%
+  group_by(group_num, potential_type) %>%
+  mutate(
+    # Lo Z-score: (Valore - Media) / Deviazione Standard
+    # Ci dice di quante deviazioni standard una posa è migliore o peggiore 
+    # rispetto alla media delle pose per QUELLA specifica proteina.
+    z_score_potential = (sum_potential - mean(sum_potential, na.rm = TRUE)) / sd(sum_potential, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# 2. Ora filtriamo solo le classi estreme per la visualizzazione
+df_zplot <- df_zscore %>%
+  filter(DockQ <= 0.24 | DockQ >= 0.81) %>%
+  mutate(
+    Classe = ifelse(DockQ >= 0.81, "Native-like (High Quality)", "Decoy (Incorrect)")
+  )
+
+# 3. Creiamo l'istogramma degli Z-score
+p_zscore <- ggplot(df_zplot, aes(x = z_score_potential, fill = Classe)) +
+  geom_histogram(position = "identity", alpha = 0.6, color = "black", bins = 60, linewidth = 0.2) +
+  facet_wrap(~ potential_type, scales = "free_y") + 
+  theme_minimal() +
+  scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                               "Decoy (Incorrect)" = "firebrick")) +
+  labs(
+    title = "Verifica del Ranking Locale: Istogramma degli Z-Score",
+    subtitle = "Punteggi normalizzati per singola proteina. Annulla il bias della dimensione.",
+    x = "Z-Score (0 = Media della proteina, <0 = Migliore della media)",
+    y = "Numero di Pose (Count)",
+    fill = "Tipo di Posa"
+  ) +
+  # Fissiamo l'asse X tra -5 e +5 per escludere rarissimi outlier che rovinerebbero la visualizzazione
+  coord_cartesian(xlim = c(-5, 5)) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+
+# 4. Salvataggio
+ggsave(
+  filename = file.path(output_dir_saturazione, "Controllo_Istogramma_ZScore_whole.png"),
+  plot = p_zscore,
+  width = 8, 
+  height = 5, 
+  dpi = 300
+)
+
+cat("\n=== Plot a istogramma con Z-Score salvato! ===\n")
