@@ -260,6 +260,7 @@ cat("\n=== Finito! I 4 grafici con il punto finale (2187 PDB) sono stati salvati
 # per il dataset "Whole Interface" come campione per il controllo bias.
 dockq_raw <- read.csv(path_dockq_af3)
 pot_raw_whole <- read.csv(path_pot_af3_whole)
+#pot_raw_strat <- read.csv(path_pot_af3_strat)
 
 merged_check <- dockq_raw %>%
   inner_join(pot_raw_whole, by = c("Model" = "pdb"))
@@ -279,7 +280,7 @@ p_density <- ggplot(df_density, aes(x = sum_potential, fill = Classe)) +
   scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
                                "Decoy (Incorrect)" = "firebrick")) +
   labs(
-    title = "Controllo Bias: Distribuzione dei Punteggi (Whole Interface)",
+    title = "Controllo Bias: Distribuzione dei Punteggi (Whole-interface)",
     subtitle = "Se le due distribuzioni sono completamente separate, il task è troppo facile.",
     x = "Sum Potential (Score Grezzo)",
     y = "Densità",
