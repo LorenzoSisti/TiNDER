@@ -252,3 +252,52 @@ salva_plot_singolo_fissato(df_plot, "Stratified", "sym", "turquoise4", auc_inter
 salva_plot_singolo_fissato(df_plot, "Stratified", "asym", "deeppink4", auc_intero = 0.74)
 
 cat("\n=== Finito! I 4 grafici con il punto finale (2187 PDB) sono stati salvati in:", output_dir_saturazione, "===\n")
+
+
+# --- 9. CONTROLLO OVERFITTING/BIAS: DISTRIBUZIONE DEI PUNTEGGI ---
+
+# Poiché merged_df era intrappolato nella funzione, carichiamo i dati al volo 
+# per il dataset "Whole Interface" come campione per il controllo bias.
+dockq_raw <- read.csv(path_dockq_af3)
+pot_raw_whole <- read.csv(path_pot_af3_whole)
+
+merged_check <- dockq_raw %>%
+  inner_join(pot_raw_whole, by = c("Model" = "pdb"))
+
+# Prepariamo i dati estraendo le due classi estreme
+df_density <- merged_check %>%
+  filter(DockQ <= 0.24 | DockQ >= 0.81) %>%
+  mutate(
+    Classe = ifelse(DockQ >= 0.81, "Native-like (High Quality)", "Decoy (Incorrect)")
+  )
+
+# Creiamo il grafico a densità
+p_density <- ggplot(df_density, aes(x = sum_potential, fill = Classe)) +
+  geom_density(alpha = 0.6, color = "black", linewidth = 0.5) +
+  facet_wrap(~ potential_type, scales = "free") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                               "Decoy (Incorrect)" = "firebrick")) +
+  labs(
+    title = "Controllo Bias: Distribuzione dei Punteggi (Whole Interface)",
+    subtitle = "Se le due distribuzioni sono completamente separate, il task è troppo facile.",
+    x = "Sum Potential (Score Grezzo)",
+    y = "Densità",
+    fill = "Tipo di Posa"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+
+# Salviamo il plot di controllo
+ggsave(
+  filename = file.path(output_dir_saturazione, "Controllo_Distribuzione_Punteggi_Whole.png"),
+  plot = p_density,
+  width = 8, 
+  height = 5, 
+  dpi = 300
+)
+
+cat("\n=== Plot di controllo della distribuzione salvato ===\n")
