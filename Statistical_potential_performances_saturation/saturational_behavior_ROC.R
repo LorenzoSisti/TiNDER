@@ -388,3 +388,117 @@ ggsave(
 )
 
 cat("\n=== Plot a istogramma con Z-Score salvato! ===\n")
+
+
+
+##### OTTIMIZZAZIONE #####
+
+# --- 9 & 10. CONTROLLO BIAS E Z-SCORE (AUTOMATIZZATO PER WHOLE E STRATIFIED) ---
+
+# 1. Carichiamo i dati base
+dockq_raw <- read.csv(path_dockq_af3)
+pot_raw_whole <- read.csv(path_pot_af3_whole)
+pot_raw_strat <- read.csv(path_pot_af3_strat)
+
+# 2. Creiamo una funzione che genera e salva i 3 plot
+generate_bias_plots <- function(pot_data, label_name, file_suffix) {
+  
+  # A. Merge dei dati
+  merged_check <- dockq_raw %>%
+    inner_join(pot_data, by = c("Model" = "pdb"))
+  
+  # B. Prepariamo i dati estraendo le due classi estreme
+  df_density <- merged_check %>%
+    filter(DockQ <= 0.24 | DockQ >= 0.81) %>%
+    mutate(
+      Classe = ifelse(DockQ >= 0.81, "Native-like (High Quality)", "Decoy (Incorrect)")
+    )
+  
+  # --- PLOT 1: DENSITÀ ---
+  p_density <- ggplot(df_density, aes(x = sum_potential, fill = Classe)) +
+    geom_density(alpha = 0.6, color = "black", linewidth = 0.5) +
+    facet_wrap(~ potential_type, scales = "free") +
+    theme_minimal() +
+    scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                                 "Decoy (Incorrect)" = "firebrick")) +
+    labs(
+      title = paste("Controllo Bias: Distribuzione dei Punteggi (", label_name, ")", sep=""),
+      subtitle = "Se le due distribuzioni sono completamente separate, il task è troppo facile.",
+      x = "Sum Potential (Score Grezzo)",
+      y = "Densità",
+      fill = "Tipo di Posa"
+    ) +
+    theme(plot.title = element_text(face = "bold", size = 14),
+          legend.position = "bottom", panel.grid.minor = element_blank())
+  
+  ggsave(
+    filename = file.path(output_dir_saturazione, paste0("Controllo_Distrib_Punteggi_", file_suffix, ".png")),
+    plot = p_density, width = 8, height = 5, dpi = 300
+  )
+  
+  # --- PLOT 2: ISTOGRAMMA ASSOLUTO ---
+  p_histogram <- ggplot(df_density, aes(x = sum_potential, fill = Classe)) +
+    geom_histogram(position = "identity", alpha = 0.6, color = "black", bins = 60, linewidth = 0.2) +
+    facet_wrap(~ potential_type, scales = "free") +
+    theme_minimal() +
+    scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                                 "Decoy (Incorrect)" = "firebrick")) +
+    labs(
+      title = paste("Controllo Bias: Conteggi Assoluti (", label_name, ")", sep=""),
+      subtitle = "L'asse Y mostra il numero reale di pose, rivelando lo sbilanciamento.",
+      x = "Sum Potential (Score Grezzo)",
+      y = "Numero di Pose (Count)",
+      fill = "Tipo di Posa"
+    ) +
+    theme(plot.title = element_text(face = "bold", size = 14),
+          legend.position = "bottom", panel.grid.minor = element_blank())
+  
+  ggsave(
+    filename = file.path(output_dir_saturazione, paste0("Controllo_Istogramma_Punteggi_", file_suffix, ".png")),
+    plot = p_histogram, width = 8, height = 5, dpi = 300
+  )
+  
+  # --- PLOT 3: Z-SCORE ---
+  df_zscore <- merged_check %>%
+    group_by(group_num, potential_type) %>%
+    mutate(
+      z_score_potential = (sum_potential - mean(sum_potential, na.rm = TRUE)) / sd(sum_potential, na.rm = TRUE)
+    ) %>%
+    ungroup()
+  
+  df_zplot <- df_zscore %>%
+    filter(DockQ <= 0.24 | DockQ >= 0.81) %>%
+    mutate(
+      Classe = ifelse(DockQ >= 0.81, "Native-like (High Quality)", "Decoy (Incorrect)")
+    )
+  
+  p_zscore <- ggplot(df_zplot, aes(x = z_score_potential, fill = Classe)) +
+    geom_histogram(position = "identity", alpha = 0.6, color = "black", bins = 60, linewidth = 0.2) +
+    facet_wrap(~ potential_type, scales = "free_y") + 
+    theme_minimal() +
+    scale_fill_manual(values = c("Native-like (High Quality)" = "forestgreen", 
+                                 "Decoy (Incorrect)" = "firebrick")) +
+    labs(
+      title = paste("Verifica Ranking Locale Z-Score (", label_name, ")", sep=""),
+      subtitle = "Punteggi normalizzati per singola proteina.",
+      x = "Z-Score (0 = Media, <0 = Migliore)",
+      y = "Numero di Pose (Count)",
+      fill = "Tipo di Posa"
+    ) +
+    coord_cartesian(xlim = c(-5, 5)) +
+    theme(plot.title = element_text(face = "bold", size = 14),
+          legend.position = "bottom", panel.grid.minor = element_blank())
+  
+  ggsave(
+    filename = file.path(output_dir_saturazione, paste0("Controllo_Istogramma_ZScore_", file_suffix, ".png")),
+    plot = p_zscore, width = 8, height = 5, dpi = 300
+  )
+  
+  cat(sprintf("\n=== Grafici salvati con successo per: %s ===\n", label_name))
+}
+
+# 3. Lanciamo la funzione per entrambi i dataset!
+generate_bias_plots(pot_raw_whole, "Whole-Interface", "Whole")
+generate_bias_plots(pot_raw_strat, "Stratified", "Stratified")
+
+cat("\n=== Tutti i controlli Bias e Z-score completati! ===\n")
