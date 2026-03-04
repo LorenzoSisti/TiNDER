@@ -1,4 +1,4 @@
-### BLOCCO 6 (MODIFICATO): SCORING WHOLE-INTERFACE PER TUTTE LE POSE ###
+### BLOCCO 6: SCORING WHOLE-INTERFACE (LEGGE I CSV DEL BLOCCO 2.1) ###
 
 ### --- 1. LIBRERIE E SETUP --- ###
 library(bio3d)
@@ -9,52 +9,50 @@ library(furrr)
 library(purrr)
 library(stringr)
 
-# Carica le tue funzioni personalizzate (assicurati che il path sia corretto)
+# Carica le tue funzioni personalizzate
 source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 
-# Imposta il parallelismo per future_map (usa tutti i core tranne 1)
+# Imposta il parallelismo per future_map
 plan(multisession, workers = parallel::detectCores() - 1)
 
-cat("--- BLOCCO 6: SCORING WHOLE-INTERFACE INIZIATO ---\n")
+cat("--- BLOCCO 6: SCRIPT DI SCORING WHOLE-INTERFACE INIZIATO ---\n")
 cat("Processori usati:", nbrOfWorkers(), "\n")
 
 ### --- 2. DEFINIZIONE DEI PERCORSI (INPUT E OUTPUT) --- ###
 
-# Input 1: La cartella con le LISTE dei potenziali (modifica i path dentro i txt se necessario)
-potentials_list_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/potenziali_selezionati_liste/"
+# Input 1: La cartella con i potenziali WHOLE INTERFACE salvati come V_sym.csv e V_asym.csv
+potentials_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/potenziali_statistici_whole_interface/"
 
 # Input 2: La cartella con le 22.000 POSE DI DOCKING
-pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
 
-# Output: La cartella dove salvare i risultati
-results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali/risultati_scoring_finale_HDOCK_WholeInt/"
-dir.create(results_dir, showWarnings = FALSE)
+# Output: La cartella dove salvare i file CSV di risultati
+results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3_WholeInt/"
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Parametri globali
 DistCutoff <- 8.5
+amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 
-### --- 3. FUNZIONE DI SCORING RIFATTORIZZATA (WHOLE INTERFACE) --- ###
+### --- 3. FUNZIONE DI SCORING WHOLE-INTERFACE --- ###
 
 calculate_whole_interface_score <- function(pdb_path, V_potential_df, potential_type) {
   
-  file_name <- basename(pdb_path)
-  
   tryCatch({
+    file_name <- basename(pdb_path)
     
-    # --- A. PREPARAZIONE GEOMETRIA (Comune a Sym e Asym) ---
+    # --- A. PREPARAZIONE GEOMETRIA ---
     pdb_aus <- read.pdb(pdb_path)  
     parts <- strsplit(file_name, "_")[[1]]
     chain_HL <- c(parts[2], parts[3])
     chain_AG <- parts[4]
     
-    # Rinumerazione
     renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path, log_file = file.path(results_dir, "scoring_errors.log"))
-    if (!renumbered_df$ok) {
-      stop(paste("Renumbering failed:", renumbered_df$error))
-    }
+    if (!renumbered_df$ok) stop(paste("Renumbering failed:", renumbered_df$error))
+    
     df_coord_renumbered <- renumbered_df$df_coord_renumbered
     
-    # Calcolo centroidi
     centroidi_df <- as.data.frame(
       df_coord_renumbered %>%
         group_by(chain, resno, resid) %>%
@@ -65,19 +63,14 @@ calculate_whole_interface_score <- function(pdb_path, V_potential_df, potential_
     df_coord_resid_xyz <- centroidi_df[, c("resid", "resno", "x", "y", "z")] 
     rownames(df_coord_resid_xyz) <- res_names
     
-    # Calcolo Distanze e Contatti
     DistMat <- as.matrix(dist(df_coord_resid_xyz[, c("x", "y", "z")]))
-    
     condA <- !(centroidi_df$chain %in% chain_HL)
     condHL <- centroidi_df$chain %in% chain_HL
     
     Inter_DistMat <- DistMat[condA, condHL]
     Inter_DistMat_Bin <- ifelse(Inter_DistMat <= DistCutoff, 1, 0)
     
-    # Check se l'interfaccia esiste
-    if (sum(Inter_DistMat_Bin) == 0) {
-      return(list(total_potential = 0, mean_potential = 0))
-    }
+    if (sum(Inter_DistMat_Bin) == 0) return(list(total_potential = 0, mean_potential = 0))
     
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
     contacts <- data.frame(
@@ -85,75 +78,51 @@ calculate_whole_interface_score <- function(pdb_path, V_potential_df, potential_
       res2 = colnames(Inter_DistMat_Bin)[contact_indices[, 2]]
     )
     
-    # --- B. CALCOLO POTENZIALE (Branching Sym vs Asym) ---
+    # --- B. CALCOLO POTENZIALE ---
     
     if (potential_type == "sym") {
-      
-      # Logica tratta da 'assign_sym_pmf_to_docking'
+      # Creiamo e raggruppiamo DIRETTAMENTE per key_pair
       contatti_clean <- contacts %>%
         mutate(
-          aa1 = sub("_.*", "", res1),
-          aa2 = sub("_.*", "", res2),
-          # IMPORTANTE: Per i simmetrici, ordiniamo alfabeticamente per matchare 
-          # chiavi come "ALA_TRP" indipendentemente dall'ordine nel pdb
-          key_pair = paste(pmin(aa1, aa2), pmax(aa1, aa2), sep="_") 
+          aa1_tmp = sub("_.*", "", res1),
+          aa2_tmp = sub("_.*", "", res2),
+          key_pair = paste(pmin(aa1_tmp, aa2_tmp), pmax(aa1_tmp, aa2_tmp), sep="_") 
         ) %>%
-        # Raggruppiamo per coppia unica simmetrica
-        group_by(aa1 = pmin(aa1, aa2), aa2 = pmax(aa1, aa2)) %>%
+        group_by(key_pair) %>%
         summarise(n_contacts = n(), .groups = "drop")
       
-      # Join con il dataframe del potenziale (V_potential_df)
-      # Assumiamo che V_potential_df abbia colonne: aa1, aa2, value
       merged_res <- V_potential_df %>%
-        select(aa1, aa2, value) %>%
-        left_join(contatti_clean, by = c("aa1", "aa2")) %>%
+        mutate(key_pair = paste(pmin(aa1, aa2), pmax(aa1, aa2), sep="_")) %>%
+        select(key_pair, value) %>%
+        distinct(key_pair, .keep_all = TRUE) %>% # Evita duplicati
+        right_join(contatti_clean, by = "key_pair") %>%
         mutate(
-          n_contacts = replace_na(n_contacts, 0),
           potenziale_totale = value * n_contacts
         )
       
-    } else { # Asym
-      
-      # Logica tratta da 'assign_asym_pmf_to_docking'
+    } else { # Asym (questo era corretto e lo lasciamo invariato)
       contatti_clean <- contacts %>%
         mutate(
-          # res2 è sulle colonne (chain_HL -> Anticorpo -> Ab)
-          # res1 è sulle righe (chain_AG -> Antigene -> Ag)
-          # Nota: Verifica sempre che Inter_DistMat sia [Ag, Ab]. Nel codice sopra:
-          # Inter_DistMat <- DistMat[condA, condHL] -> Righe=Ag, Colonne=Ab.
-          
-          aa1 = paste0(sub("_.*", "", res2), "_Ab"), # Anticorpo
-          aa2 = paste0(sub("_.*", "", res1), "_Ag")  # Antigene
+          aa1 = sub("_.*", "", res2), # Anticorpo (res2) -> Righe della matrice
+          aa2 = sub("_.*", "", res1)  # Antigene (res1)  -> Colonne della matrice
         ) %>%
         group_by(aa1, aa2) %>%
         summarise(n_contacts = n(), .groups = "drop")
       
-      # Join con il dataframe del potenziale
       merged_res <- V_potential_df %>%
-        select(aa1, aa2, value) %>%
-        left_join(contatti_clean, by = c("aa1", "aa2")) %>%
+        right_join(contatti_clean, by = c("aa1", "aa2")) %>%
         mutate(
-          n_contacts = replace_na(n_contacts, 0),
           potenziale_totale = value * n_contacts
         )
     }
     
-    # --- C. CALCOLO SCORE FINALE ---
+    # --- C. SCORE FINALE ---
     total_potential <- sum(merged_res$potenziale_totale, na.rm = TRUE)
-    
-    # Calcolo numero totale di contatti osservati per la media
     total_observed_contacts <- sum(contatti_clean$n_contacts)
     
-    mean_potential <- if (total_observed_contacts > 0) {
-      total_potential / total_observed_contacts
-    } else {
-      0 # O NA, a seconda della preferenza
-    }
+    mean_potential <- if (total_observed_contacts > 0) total_potential / total_observed_contacts else NA
     
-    return(list(
-      total_potential = total_potential, 
-      mean_potential = mean_potential
-    ))
+    return(list(total_potential = total_potential, mean_potential = mean_potential))
     
   }, error = function(e) {
     cat("!!! ERRORE su file:", basename(pdb_path), "| Msg:", e$message, "\n")
@@ -161,67 +130,68 @@ calculate_whole_interface_score <- function(pdb_path, V_potential_df, potential_
   })
 }
 
-### --- 4. CARICAMENTO LISTE E CICLO PRINCIPALE --- ###
+### --- 4. RICERCA FILE E CICLO PRINCIPALE --- ###
 
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 cat("Trovate", length(all_docked_pdbs), "pose PDB da analizzare.\n")
 
-potential_list_files <- list.files(potentials_list_dir, pattern = "\\.txt$", full.names = TRUE)
-cat("Trovati", length(potential_list_files), "file di liste di potenziali da processare.\n")
+# NOTA LA DIFFERENZA QUI: Cerchiamo i file V_sym.csv e V_asym.csv
+potential_csv_paths <- list.files(potentials_dir, 
+                                  pattern = "V_(sym|asym)\\.csv$", 
+                                  recursive = TRUE, 
+                                  full.names = TRUE)
+cat("Trovati", length(potential_csv_paths), "file di potenziali da processare.\n")
 
-for (list_file_path in potential_list_files) {
+for (potential_path in potential_csv_paths) {
   
-  potential_rds_paths <- readLines(list_file_path)
+  type_tag <- if (str_detect(basename(potential_path), "asym")) "asym" else "sym"
   
-  for (potential_path in potential_rds_paths) {
-    
-    # --- A. IDENTIFICAZIONE TIPO (Sym/Asym) e ID ---
-    type_tag <- if (str_detect(potential_path, "sym")) "sym" else "asym"
-    
-    # Estrazione ID come nel vecchio script
-    seed_tag <- str_extract(potential_path, "seed_\\d+") 
-    split_tag <- str_extract(potential_path, "split_\\d+")
-    group_tag <- str_extract(potential_path, "group_\\d+")
-    id_tag <- paste(seed_tag, split_tag, group_tag, sep = "_")
-    
-    # Nome file output (identico formato)
-    output_filename <- paste0("scores_", id_tag, "_", type_tag, ".csv")
-    output_filepath <- file.path(results_dir, output_filename)
-    
-    if (file.exists(output_filepath)) {
-      cat("--- SALTO:", output_filename, "(già calcolato) ---\n")
-      next
-    }
-    
-    cat("--- INIZIO CALCOLO PER:", output_filename, "---\n")
-    
-    # Carica il potenziale (Whole Interface)
-    # Si aspetta un DF con colonne: aa1, aa2, value
-    V_potential_df <- readRDS(potential_path)
-    
-    # --- B. ESECUZIONE PARALLELA ---
-    
-    summary_results <- future_map_dfr(
-      all_docked_pdbs,
-      function(pdb_path) {
-        
-        res <- calculate_whole_interface_score(pdb_path, V_potential_df, type_tag)
-        
-        data.frame(
-          pdb = basename(pdb_path),
-          sum_potential = res$total_potential,
-          mean_potential = res$mean_potential
-        )
-      },
-      .progress = TRUE,
-      .options = furrr_options(seed = TRUE)
-    )
-    
-    # --- C. SALVATAGGIO ---
-    write.csv(summary_results, file = output_filepath, row.names = FALSE)
-    cat("--- SALVATO:", output_filename, "---\n")
-    
-  } 
-}
+  # Estrai ID dal percorso (es: seed_123 / split_3 / group_1)
+  # Poiché il file si chiama "V_sym.csv", dobbiamo estrarre le info dalle cartelle superiori
+  seed_tag <- str_extract(potential_path, "seed_\\d+") 
+  split_tag <- str_extract(potential_path, "split_\\d+")
+  group_tag <- str_extract(dirname(potential_path), "group_\\d+") # Prende group dal nome della cartella
+  
+  id_tag <- paste(seed_tag, split_tag, group_tag, sep = "_")
+  output_filename <- paste0("scores_", id_tag, "_", type_tag, ".csv")
+  output_filepath <- file.path(results_dir, output_filename)
+  
+  if (file.exists(output_filepath)) {
+    cat("--- SALTO:", output_filename, "(già calcolato) ---\n")
+    next
+  }
+  
+  cat("--- INIZIO CALCOLO PER:", output_filename, "---\n")
+  
+  # 1. Leggi la matrice 20x20 CSV
+  V_mat <- read.csv(potential_path, row.names = 1)
+  
+  # 2. Trasformala in un dataframe lungo (aa1, aa2, value) per renderla compatibile con lo scoring
+  V_potential_df <- expand.grid(aa1 = rownames(V_mat), aa2 = colnames(V_mat), stringsAsFactors = FALSE)
+  V_potential_df$value <- as.vector(as.matrix(V_mat))
+  
+  # Pulizia: se per caso il Blocco 2 avesse salvato i nomi con "ALA_Ab", togliamo il suffisso
+  V_potential_df$aa1 <- sub("_.*", "", V_potential_df$aa1)
+  V_potential_df$aa2 <- sub("_.*", "", V_potential_df$aa2)
+  
+  # --- B. ESECUZIONE PARALLELA ---
+  summary_results <- future_map_dfr(
+    all_docked_pdbs,
+    function(pdb_path) {
+      res <- calculate_whole_interface_score(pdb_path, V_potential_df, type_tag)
+      data.frame(
+        pdb = basename(pdb_path),
+        sum_potential = res$total_potential,
+        mean_potential = res$mean_potential
+      )
+    },
+    .progress = TRUE,
+    .options = furrr_options(seed = TRUE)
+  )
+  
+  # --- C. SALVATAGGIO ---
+  write.csv(summary_results, file = output_filepath, row.names = FALSE)
+  cat("--- SALVATO:", output_filename, "---\n")
+} 
 
-cat("--- BLOCCO 6 (Whole Interface): FINITO! ---\n")
+cat("--- BLOCCO 6 (Whole Interface): FINITO! Processati", length(potential_csv_paths), "potenziali. ---\n")
