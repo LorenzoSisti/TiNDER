@@ -4,9 +4,9 @@ library(pROC)
 library(ggplot2)
 
 # --- 2. PERCORSI FILE ---
-path_dockq_af3 <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_AF3.csv"
-path_pot_af3_whole <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3_WholeInt/MASTER_RESULTS_AF3_tidy.csv"
-path_pot_af3_strat <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3/MASTER_RESULTS_AF3_tidy.csv"
+path_dockq_af3 <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_HDOCK.csv"
+path_pot_af3_whole <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_HDOCK_WholeInt/MASTER_RESULTS_HDOCK_tidy.csv"
+path_pot_af3_strat <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_HDOCK/MASTER_RESULTS_HDOCK_tidy.csv"
 
 # --- 3. FUNZIONE DI CALCOLO ROC AUC RAGGRUPPATA ---
 calcola_statistiche_auc <- function(dockq_path, pot_path) {
@@ -68,7 +68,7 @@ print(risultati_strat$riassunto_split)
 
 # --- 5. SALVATAGGIO IN CSV ---
 # !!! INSERISCI QUI IL PERCORSO DELLA TUA CARTELLA !!!
-output_dir_saturazione <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/plot_saturazione_potenziali"
+output_dir_saturazione <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/plot_saturazione_potenziali_HDOCK"
 dir.create(output_dir_saturazione, showWarnings = FALSE, recursive = TRUE)
 
 # Salvataggio dei riassunti in CSV
@@ -246,10 +246,10 @@ salva_plot_singolo_fissato <- function(df, nome_dataset, tipo_potenziale, colore
 
 # Generiamo e salviamo le 4 curve, passando i valori hardcoded dell'intero dataset
 # !!! INSERISCI I TUOI VERI VALORI DI AUC AL POSTO DI QUELLI DI ESEMPIO (es. 0.75, 0.82...) !!!
-salva_plot_singolo_fissato(df_plot, "Whole Interface", "sym", "dodgerblue2", auc_intero = 0.55)
-salva_plot_singolo_fissato(df_plot, "Whole Interface", "asym", "mediumvioletred", auc_intero = 0.70)
-salva_plot_singolo_fissato(df_plot, "Stratified", "sym", "turquoise4", auc_intero = 0.60) 
-salva_plot_singolo_fissato(df_plot, "Stratified", "asym", "deeppink4", auc_intero = 0.74)
+salva_plot_singolo_fissato(df_plot, "Whole Interface", "sym", "dodgerblue2", auc_intero = 0.57)
+salva_plot_singolo_fissato(df_plot, "Whole Interface", "asym", "mediumvioletred", auc_intero = 0.94)
+salva_plot_singolo_fissato(df_plot, "Stratified", "sym", "turquoise4", auc_intero = 0.59) 
+salva_plot_singolo_fissato(df_plot, "Stratified", "asym", "deeppink4", auc_intero = 0.64)
 
 cat("\n=== Finito! I 4 grafici con il punto finale (2187 PDB) sono stati salvati in:", output_dir_saturazione, "===\n")
 
@@ -502,3 +502,56 @@ generate_bias_plots(pot_raw_whole, "Whole-Interface", "Whole")
 generate_bias_plots(pot_raw_strat, "Stratified", "Stratified")
 
 cat("\n=== Tutti i controlli Bias e Z-score completati! ===\n")
+
+# ==============================================================================
+# --- 11. CONFRONTO FINALE: AUC GLOBALE (GREZZA VS Z-SCORE) ---
+# ==============================================================================
+
+cat("\n\n=== ESECUZIONE TEST DI BIAS: AUC GREZZA VS AUC Z-SCORE ===\n")
+
+# 1. Utilizziamo i dati già caricati e uniti (merged_check)
+# Calcoliamo lo Z-score e la classe binaria in un colpo solo
+df_confronto <- merged_check %>%
+  group_by(group_num, potential_type) %>%
+  mutate(
+    # Normalizzazione locale (Z-Score) per ogni proteina
+    z_score = (sum_potential - mean(sum_potential, na.rm = TRUE)) / sd(sum_potential, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  # Teniamo solo le classi estreme (Sharpening)
+  filter(DockQ <= 0.24 | DockQ >= 0.81) %>%
+  mutate(true_class = ifelse(DockQ >= 0.81, 1, 0))
+
+# 2. Funzione rapida per calcolare l'AUC globale per tipo di potenziale
+calcola_comparazione <- function(df_input, tipo) {
+  df_sub <- df_input %>% filter(potential_type == tipo)
+  
+  # AUC sul punteggio Grezzo (risente del bias di scala tra proteine diverse)
+  auc_grezza <- as.numeric(roc(df_sub$true_class, df_sub$sum_potential, quiet = TRUE)$auc)
+  
+  # AUC sullo Z-score (pulisce il bias e valuta la capacità di ranking reale)
+  auc_zscore <- as.numeric(roc(df_sub$true_class, df_sub$z_score, quiet = TRUE)$auc)
+  
+  return(data.frame(
+    Potential = tipo,
+    AUC_Grezza = round(auc_grezza, 3),
+    AUC_ZScore = round(auc_zscore, 3),
+    Differenza = round(auc_grezza - auc_zscore, 3)
+  ))
+}
+
+# 3. Applichiamo il calcolo per i tipi esistenti (sym / asym)
+tipi_potenziale <- unique(df_confronto$potential_type)
+risultati_bias <- do.call(rbind, lapply(tipi_potenziale, function(t) calcola_comparazione(df_confronto, t)))
+
+# 4. Stampiamo il verdetto a schermo
+print(risultati_bias)
+
+cat("\n--- Interpretazione ---")
+cat("\n- Se AUC_ZScore è simile a AUC_Grezza: Il modello è robusto e il ranking è reale.")
+cat("\n- Se AUC_ZScore << AUC_Grezza: Il modello 'barava' usando la scala globale delle proteine.\n")
+
+# 5. Salvataggio opzionale del report
+write.csv(risultati_bias, file.path(output_dir_saturazione, "Test_Bias_ZScore_Report.csv"), row.names = FALSE)
+
+# ==============================================================================
