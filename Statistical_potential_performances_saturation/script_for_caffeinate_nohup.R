@@ -24,11 +24,11 @@ cat("Processori usati:", nbrOfWorkers(), "\n")
 potentials_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/potenziali_statistici_stratificati/"
 
 # Input 2: La cartella con le 22.000 POSE DI DOCKING da analizzare
-#pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
-pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
+#pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
 
 # Output: La cartella dove salvare i 40 file CSV di risultati
-results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3/"
+results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_HDOCK/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Parametri globali

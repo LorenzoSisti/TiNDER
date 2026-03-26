@@ -3,7 +3,7 @@ library(purrr)
 library(stringr)
 
 # 1. Cartella GIUSTA con i file CSV del Blocco 6
-results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_AF3/"
+results_dir <- "/Users/lorenzosisti/Downloads/saturazione_prestazione_potenziali_marzo/risultati_scoring_finale_HDOCK_WholeInt/"
 
 # 2. Pattern corretto: legge SOLO i file che iniziano con "scores_" e finiscono in ".csv"
 all_csv_files <- list.files(results_dir, pattern = "^scores_.*\\.csv$", full.names = TRUE)
@@ -30,7 +30,7 @@ full_results_df <- map_dfr(all_csv_files, function(file_path) {
 })
 
 # Salva il file master
-write.csv(full_results_df, file.path(results_dir, "MASTER_RESULTS_AF3_tidy.csv"), row.names = FALSE)
-saveRDS(full_results_df, file.path(results_dir, "MASTER_RESULTS_AF3_tidy.rds"))
+write.csv(full_results_df, file.path(results_dir, "MASTER_RESULTS_HDOCK_tidy.csv"), row.names = FALSE)
+saveRDS(full_results_df, file.path(results_dir, "MASTER_RESULTS_HDOCK_tidy.rds"))
 
 cat("Fatto! Risultati combinati salvati.\n")
