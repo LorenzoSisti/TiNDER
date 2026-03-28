@@ -22,8 +22,8 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_HDOCK_opt"
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/test_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/HDOCK/"
 
 #pdb_dir <- "/path/to/your/docked/structures/files/directory/"
 #results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
@@ -41,8 +41,8 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
 # Load precomputed statistical potential data frames
-asym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/matrice_singola_novembre_x_github_opt/V_asym_df.csv")
-sym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/matrice_singola_novembre_x_github_opt/V_sym_df.csv")
+asym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/whole_interface_potentials/V_asym_df.csv")
+sym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/whole_interface_potentials/V_sym_df.csv")
 
 # Function that computes symmetric statistical potentials for a given PDB model
 assign_sym_pmf_to_docking <- function(pdb_path) {

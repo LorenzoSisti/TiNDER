@@ -22,16 +22,16 @@ plan(multisession, workers = parallel::detectCores() - 1)
 ### Define directories and global parameters
 #pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
 #results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_AF3_prova_strati_opt_marzo_2"
-pdb_dir <- "/Users/lorenzosisti/Downloads/models/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_HDOCK_prova_strati_opt_marzo"
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/test_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/HDOCK_g_r/"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
 Nsteps <- 3
 
 # Load precomputed statistical potential data frames
-V_asym_wide <- read.csv("/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/V_asym_wide.csv")
-V_sym_wide  <- read.csv("/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/V_sym_wide.csv")
+V_asym_wide <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/V_asym_wide.csv")
+V_sym_wide  <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/V_sym_wide.csv")
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
