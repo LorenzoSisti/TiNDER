@@ -49,4 +49,24 @@ indici_187 <- sample(indici_4_char, 187)
 pdbs_187  <- all_pdbs[indici_187]   # Le 187 proteine scelte a caso (solo 4 caratteri)
 pdbs_2000 <- all_pdbs[-indici_187]  # Le rimanenti 2000 proteine
 
+# 1. Estraggo i codici PDB (i 4 caratteri) dalla lista pdbs_187
+codici_187 <- sub("\\.pdb$", "", basename(pdbs_187))
 
+# 2. Filtro all_docked_pdbs
+# Prendo solo i file in cui i primi 4 caratteri del nome file corrispondono a uno dei codici_187
+docked_187 <- all_docked_pdbs[substr(basename(all_docked_pdbs), 1, 4) %in% codici_187]
+
+# Definisco i percorsi delle due nuove sottocartelle
+test_dir <- file.path(results_dir, "test_dir")
+training_dir <- file.path(results_dir, "training_dir")
+
+# Creo le sottocartelle (showWarnings = FALSE evita errori se esistono già)
+dir.create(test_dir, showWarnings = FALSE)
+dir.create(training_dir, showWarnings = FALSE)
+
+# Copio i file di test (docked_187) nella test_dir
+# overwrite = TRUE sovrascrive i file se dovessi far girare lo script più volte
+file.copy(from = docked_187, to = test_dir, overwrite = TRUE)
+
+# Copio i file di training (pdbs_2000) nella training_dir
+file.copy(from = pdbs_2000, to = training_dir, overwrite = TRUE)
