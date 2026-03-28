@@ -14,8 +14,11 @@ library(tidyverse)
 
 
 ### Setting paths, directories and global variables ###
-pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
+#pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+#results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
+
 dir.create(results_dir, showWarnings = FALSE)
 
 

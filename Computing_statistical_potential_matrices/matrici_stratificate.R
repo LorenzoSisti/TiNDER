@@ -7,8 +7,10 @@ library(bio3d)
 library(dplyr)
 
 ### Setting paths, directories and global variables ###
-pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir_intra <- "/Users/lorenzosisti/Downloads/matrici_stratificate/" 
+#pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+#results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
 dir.create(results_dir_intra, showWarnings = FALSE)
 
 DistCutoff <- 8.5 # Two residues are defined as "in contact" if the centroids of their side chain are at less than 8.5 Angstroms
@@ -273,20 +275,20 @@ datasets <- list(
 for (name in names(datasets)) {
   
   # Salva l'intero oggetto lista (questo era già corretto)
-  saveRDS(datasets[[name]], file = file.path(results_dir_intra, paste0(name, ".rds")))
+  saveRDS(datasets[[name]], file = file.path(results_dir, paste0(name, ".rds")))
   
   # Distingui come salvare i CSV
   if (name %in% c("contact_matrices_asym_rings", "contact_matrices_sym_rings")) {
     # Caso 1: Le matrici (lista di 6 elementi nominati)
     for (pair in ring_pairs) {
       # Usiamo il nome della coppia (es. "1-1", "1-2") nel nome del file
-      fname <- file.path(results_dir_intra, paste0(name, "_", pair, ".csv"))
+      fname <- file.path(results_dir, paste0(name, "_", pair, ".csv"))
       write.csv(datasets[[name]][[pair]], file = fname, row.names = TRUE)
     }
   } else {
     # Caso 2: I conteggi (lista di 3 elementi numerati)
     for (step in 1:Nsteps) {
-      fname <- file.path(results_dir_intra, paste0(name, "_step", step, ".csv"))
+      fname <- file.path(results_dir, paste0(name, "_step", step, ".csv"))
       write.csv(datasets[[name]][[step]], file = fname, row.names = TRUE)
     }
   }
@@ -295,10 +297,10 @@ for (name in names(datasets)) {
 ### CHECK ON THE CONTACT NUMBERS IN EACH RADIAL RING ###
 
 ### Load saved data ###
-contact_matrix_sym <- readRDS(file.path(results_dir_intra, "contact_matrices_sym_rings.rds"))
-contact_matrix_asym <- readRDS(file.path(results_dir_intra, "contact_matrices_asym_rings.rds"))
-residue_counts_interface_ab <- readRDS(file.path(results_dir_intra, "residue_counts_interface_ab.rds"))
-residue_counts_interface_ligando <- readRDS(file.path(results_dir_intra, "residue_counts_interface_ligand_df.rds"))
+contact_matrix_sym <- readRDS(file.path(results_dir, "contact_matrices_sym_rings.rds"))
+contact_matrix_asym <- readRDS(file.path(results_dir, "contact_matrices_asym_rings.rds"))
+residue_counts_interface_ab <- readRDS(file.path(results_dir, "residue_counts_interface_ab.rds"))
+residue_counts_interface_ligando <- readRDS(file.path(results_dir, "residue_counts_interface_ligand_df.rds"))
 
 ### Calculate and display triangular sums of contact matrices ###
 triangular_sums <- numeric(2*Nsteps)

@@ -30,8 +30,8 @@ handlers(global = TRUE)
 handlers("rstudio")
 
 ### Define directories and global parameters
-pdb_dir <- "/path/to/your/non/redundant/pdb/files/directory/"
-results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/whole_interface_potentials/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
