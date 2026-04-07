@@ -10,11 +10,11 @@ library(dplyr)
 #pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
 #results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
 pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
-dir.create(results_dir_intra, showWarnings = FALSE)
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/two_g_r_potentials/"
+dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5 # Two residues are defined as "in contact" if the centroids of their side chain are at less than 8.5 Angstroms
-Nsteps <- 3 # Number of concentric "rings" around the interface
+Nsteps <- 2 # Number of concentric "rings" around the interface
 
 pdbL <- list.files(pdb_dir)
 
@@ -26,7 +26,7 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 
 # MODIFICATO: Inizializzazione delle strutture dati cumulative
 # Definiamo i nomi per le 6 combinazioni di ring
-ring_pairs <- c("1-1", "2-2", "3-3", "1-2", "2-3", "1-3")
+ring_pairs <- c("1-1", "2-2", "1-2")
 
 # Inizializza le strutture dati CUMULATIVE per le 6 matrici
 contact_matrices_asym_rings_sum <- vector("list", length(ring_pairs))
@@ -127,7 +127,7 @@ process_pdb_file <- function(s) {
     DistMat_centroid <- as.matrix(dist(rbind(df_centroids_BS[, c("x", "y", "z")], center_BS)))
     vet_dist_centroid <- DistMat_centroid[-nrow(DistMat_centroid), ncol(DistMat_centroid)]
     r_max <- max(vet_dist_centroid)
-    borders <- c(0, 0.37, 0.64, 1) * r_max 
+    borders <- c(0, 0.5, 1) * r_max 
     
     # ... (codice invariato per assegnazione contatti e ring) ...
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
@@ -146,7 +146,7 @@ process_pdb_file <- function(s) {
     
     # MODIFICATO: Inizializzazione delle strutture dati locali
     # Usiamo gli stessi nomi definiti globalmente
-    ring_pairs <- c("1-1", "2-2", "3-3", "1-2", "2-3", "1-3")
+    ring_pairs <- c("1-1", "2-2", "1-2")
     
     contact_matrices_asym_rings <- vector("list", length(ring_pairs))
     names(contact_matrices_asym_rings) <- ring_pairs
