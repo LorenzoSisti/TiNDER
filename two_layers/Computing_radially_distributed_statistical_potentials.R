@@ -17,13 +17,13 @@ library(tidyverse)
 #pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
 #results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
 pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/two_g_r_potentials/"
 
 dir.create(results_dir, showWarnings = FALSE)
 
 
 DistCutoff <- 8.5
-Nsteps <- 3
+Nsteps <- 2
 S <- 0.02
 
 amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
@@ -54,7 +54,7 @@ for (step in 1:Nsteps) {
 }
 
 ### === STEP 2: compute potentials for each pair of rings === ###
-ring_pairs <- list(c(1,1), c(2,2), c(3,3), c(1,2), c(2,3), c(1,3))
+ring_pairs <- list(c(1,1), c(2,2), c(1,2))
 
 for (idx in seq_along(ring_pairs)) {
   
