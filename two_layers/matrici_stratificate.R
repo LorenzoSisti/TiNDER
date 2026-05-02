@@ -127,7 +127,7 @@ process_pdb_file <- function(s) {
     DistMat_centroid <- as.matrix(dist(rbind(df_centroids_BS[, c("x", "y", "z")], center_BS)))
     vet_dist_centroid <- DistMat_centroid[-nrow(DistMat_centroid), ncol(DistMat_centroid)]
     r_max <- max(vet_dist_centroid)
-    borders <- c(0, 0.5, 1) * r_max 
+    borders <- c(0, 0.38, 1) * r_max 
     
     # ... (codice invariato per assegnazione contatti e ring) ...
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)

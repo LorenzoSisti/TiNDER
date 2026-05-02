@@ -20,18 +20,18 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_AF3_prova_strati_opt_aprile"
-#pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/test_dir/"
-#results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/HDOCK_g_r/"
+#pdb_dir <- "/Users/lorenzosisti/Downloads/AF3_docking/AF3_docking_poses/"
+#results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_AF3_prova_strati_opt_marzo_2"
+pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/test_dir/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/HDOCK_g_r/"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
-Nsteps <- 2
+Nsteps <- 3
 
 # Load precomputed statistical potential data frames
-V_asym_wide <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/two_g_r_potentials/V_asym_wide.csv")
-V_sym_wide  <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/two_g_r_potentials/V_sym_wide.csv")
+V_asym_wide <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/V_asym_wide.csv")
+V_sym_wide  <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/V_sym_wide.csv")
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
@@ -89,7 +89,7 @@ assign_sym_gr_pmf_to_docking <- function(pdb_path) {
   DistMat_centroid <- as.matrix(dist(rbind(df_centroids_BS[, c("x", "y", "z")], center_BS)))
   vet_dist_centroid <- DistMat_centroid[-nrow(DistMat_centroid), ncol(DistMat_centroid)]
   
-  borders <- c(0, 0.38, 1) * max(vet_dist_centroid)
+  borders <- c(0, 0.37, 0.64, 1) * max(vet_dist_centroid)
   contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
   contacts <- data.frame(
     res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]],
@@ -183,7 +183,7 @@ assign_asym_gr_pmf_to_docking <- function(pdb_path) {
   DistMat_centroid <- as.matrix(dist(rbind(df_centroids_BS[, c("x", "y", "z")], center_BS)))
   vet_dist_centroid <- DistMat_centroid[-nrow(DistMat_centroid), ncol(DistMat_centroid)]
   
-  borders <- c(0, 0.38, 1) * max(vet_dist_centroid)
+  borders <- c(0, 0.37, 0.64, 1) * max(vet_dist_centroid)
   contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
   contacts <- data.frame(
     res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]],
