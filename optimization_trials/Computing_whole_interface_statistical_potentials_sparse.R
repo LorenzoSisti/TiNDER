@@ -34,11 +34,12 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/TiNDER/optimization_trials/whole_interface_statistical_potential/" 
+results_dir <- "/Users/lorenzosisti/TiNDER/optimization_trials/sparse_whole_interface_statistical_potential/" 
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
 DistCutoff <- 8.5  
+S <- 0.02
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
@@ -219,14 +220,21 @@ residue_freq <- par_plus_epi / sum(par_plus_epi)
 
 # Compute normalized contact frequencies
 asym_lower_tri <- contact_matrix_sym_sum[lower.tri(contact_matrix_sym_sum, diag = TRUE)] # All the symmetrical contact information is in a triangular
-contact_freq_sym <- contact_matrix_sym_sum / sum(asym_lower_tri) 
-contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
+
+cm_sym <- sum(asym_lower_tri) 
+cm_asym <- sum(contact_matrix_asym_sum)
+
+contact_freq_sym <- contact_matrix_sym_sum / cm_sym
+contact_freq_asym <- contact_matrix_asym_sum / cm_asym
+
+ratio_asym <- contact_freq_asym / outer(paratope_freq, epitope_freq, "*")
+ratio_sym  <- contact_freq_sym / outer(residue_freq, residue_freq, "*")
 
 # Compute statistical potentials
-V_asym <- -log(contact_freq_asym / outer(paratope_freq, epitope_freq, "*")) * 2.479
-V_sym  <- -log(contact_freq_sym / outer(residue_freq, residue_freq, "*")) * 2.479
-V_asym[!is.finite(V_asym)] <- 0
-V_sym[!is.finite(V_sym)] <- 0
+V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479
+V_sym  <- (log(1 + cm_sym  * S) - log(1 + cm_sym  * S * ratio_sym)) * 2.479
+#V_asym[!is.finite(V_asym)] <- 0
+#V_sym[!is.finite(V_sym)] <- 0
 
 ### Prepare and plot heatmaps
 # Compute global min/max across both matrices for consistent color scaling
