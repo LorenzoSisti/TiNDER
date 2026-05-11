@@ -167,14 +167,14 @@ for (pdb_file in pdb_files) {
           if (aa_ab %in% amino_acids && aa_ag %in% amino_acids) {
             
             # Matrice Asimmetrica
-            contact_matrices_asym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_asym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 2
+            contact_matrices_asym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_asym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 1
             
             # Matrice Simmetrica
             if (aa_ab == aa_ag) {
-              contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 2
+              contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 1
             } else {
-              contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 2
-              contact_matrices_sym_rings_sum[[cdr_name]][aa_ag, aa_ab] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ag, aa_ab] + 2
+              contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ab, aa_ag] + 1
+              contact_matrices_sym_rings_sum[[cdr_name]][aa_ag, aa_ab] <- contact_matrices_sym_rings_sum[[cdr_name]][aa_ag, aa_ab] + 1
             }
           }
         }
@@ -273,7 +273,7 @@ for (cdr_name in cdr_index) {
   
   # Probabilità osservate
   P_obs_asym <- cm_asym / sum(cm_asym)
-  P_obs_sym  <- cm_sym  / sum(cm_sym[lower.tri(cm_sym, diag = TRUE)])
+  P_obs_sym  <- cm_sym  / sum(cm_sym)
   
   ### Matrici relative (Expected Probabilities)
   ratio_asym <- P_obs_asym / outer(P_par, P_epi, "*")
