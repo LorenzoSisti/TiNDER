@@ -60,6 +60,8 @@ for (index in cdr_index) {
   residue_counts_interface_ab_sum[[index]] <- setNames(rep(0, length(amino_acids)), amino_acids)
 }
 
+#pdb_file <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//1afv.pdb"
+
 # Inizio Loop su tutti i file PDB  
 for (pdb_file in pdb_files) { 
   
@@ -81,30 +83,25 @@ for (pdb_file in pdb_files) {
     }
     
     df_coord_corrected <- df_coord
-    corrected_dfs <- list()
     
-    # Rinomina eventuali inserzioni (es. 100A, 100B)
-    for (chain in unique(df_coord_corrected$chain)) {
-      unique_residues <- unique(paste(df_coord_corrected$resno[df_coord_corrected$chain == chain],
-                                      df_coord_corrected$insert[df_coord_corrected$chain == chain], sep=""))
-      new_numbering <- setNames(seq_along(unique_residues), unique_residues)
-      df_coord_corrected$resno[df_coord_corrected$chain == chain] <- new_numbering[paste(df_coord_corrected$resno[df_coord_corrected$chain == chain],
-                                                                                         df_coord_corrected$insert[df_coord_corrected$chain == chain], sep="")]
-      corrected_dfs[[chain]] <- df_coord_corrected[df_coord_corrected$chain == chain, ]
-    }
+    # 1. Gestione dei valori NA nella colonna insert (li trasformiamo in stringhe vuote)
+    df_coord_corrected$insert[is.na(df_coord_corrected$insert)] <- ""
     
-    df_coord_corrected <- do.call(rbind, corrected_dfs)
-    
-    # Compute centroid coordinates
+    # 2. Compute centroid coordinates (Aggiunto 'insert' nel group_by)
     centroidi_df <- as.data.frame(
       df_coord_corrected %>%
-        group_by(chain, resno, resid) %>%
+        group_by(chain, resno, insert, resid) %>%
         summarise(x = mean(x), y = mean(y), z = mean(z), .groups = 'drop')
     )
     
-    res_names <- paste(centroidi_df$resid, centroidi_df$resno, centroidi_df$chain, sep = "_")
+    # 3. Creazione di nomi univoci che includono la lettera di inserzione (es. PHE_100A_H)
+    res_names <- paste(centroidi_df$resid, 
+                       paste0(centroidi_df$resno, centroidi_df$insert), 
+                       centroidi_df$chain, sep = "_")
+    
     rownames(centroidi_df) <- res_names
     
+    # 4. Salvataggio dataframe con le coordinate per la matrice di distanza
     df_coord_resid_xyz <- centroidi_df[, c("resid", "resno", "x", "y", "z")] 
     rownames(df_coord_resid_xyz) <- res_names
     
@@ -386,4 +383,5 @@ write.csv(df_sym_wide,  file.path(results_dir, "V_sym_wide.csv"),  row.names = F
 write.csv(df_asym_wide, file.path(results_dir, "V_asym_wide.csv"), row.names = FALSE)
 
 message("\n✅ Generati:\n- V_sym_wide.csv (210 righe × 8 colonne: aa1, aa2, V_cdr_h1, ..., V_cdr_l3)\n- V_asym_wide.csv (400 righe × 8 colonne: aa1, aa2, V_cdr_h1, ..., V_cdr_l3)\n")
+
 
