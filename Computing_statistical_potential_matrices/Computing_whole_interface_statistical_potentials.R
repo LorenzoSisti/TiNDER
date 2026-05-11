@@ -211,31 +211,63 @@ for (name in names(datasets)) {
 
 ### Compute frequencies and statistical potentials
 
+### Compute frequencies and statistical potentials
+
 # ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
 paratope_freq <- residue_counts_interface_ab_sum / sum(residue_counts_interface_ab_sum)
-epitope_freq <- residue_counts_interface_ligando_sum / sum(residue_counts_interface_ligando_sum)
+epitope_freq  <- residue_counts_interface_ligando_sum / sum(residue_counts_interface_ligando_sum)
 
 # SYMMETRIC approach: Combine counts from both chains and compute normalized frequencies
 par_plus_epi <- residue_counts_interface_ab_sum + residue_counts_interface_ligando_sum
 residue_freq <- par_plus_epi / sum(par_plus_epi)
 
-# Compute normalized contact frequencies
-#asym_lower_tri <- contact_matrix_sym_sum[lower.tri(contact_matrix_sym_sum, diag = TRUE)] # All the symmetrical contact information is in a triangular NOOOOOOO
-contact_matrix_sym_sum[upper.tri(contact_matrix_sym_sum)] <- 0
-contact_freq_sym <- contact_matrix_sym_sum / sum(contact_matrix_sym_sum) 
+# -------------------------
+# ASYMMETRIC
+# -------------------------
 contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 
-# Compute statistical potentials
-#V_asym <- -log(contact_freq_asym / outer(paratope_freq, epitope_freq, "*")) * 2.479
-#V_sym  <- -log(contact_freq_sym / outer(residue_freq, residue_freq, "*")) * 2.479
-
-### Matrici relative (Expected Probabilities)
-ratio_asym <- contact_freq_asym / outer(paratope_freq, epitope_freq, "*")
-ratio_sym  <- contact_freq_sym  / outer(residue_freq, residue_freq, "*")
+expected_asym <- outer(paratope_freq, epitope_freq, "*")
+ratio_asym <- contact_freq_asym / expected_asym
 
 V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
-V_sym  <- (log(1 + contact_matrix_sym_sum  * S) - log(1 + contact_matrix_sym_sum  * S * ratio_sym)) * 2.479
 
+# -------------------------
+# SYMMETRIC
+# -------------------------
+
+# Keep only the lower triangle (unique unordered pairs)
+mask_sym <- lower.tri(contact_matrix_sym_sum, diag = TRUE)
+contact_matrix_sym_sum[!mask_sym] <- 0
+
+# Observed frequencies on the 210 unique pairs
+contact_freq_sym <- matrix(0, nrow = 20, ncol = 20,
+                           dimnames = list(amino_acids, amino_acids))
+contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_matrix_sym_sum[mask_sym])
+
+# Expected frequencies for unordered pairs:
+# diagonal   -> p_i^2
+# off-diagonal -> 2 * p_i * p_j
+expected_sym <- outer(residue_freq, residue_freq, "*")
+expected_sym[row(expected_sym) != col(expected_sym)] <-
+  2 * expected_sym[row(expected_sym) != col(expected_sym)]
+
+# Keep only the same lower triangle
+expected_sym[!mask_sym] <- 0
+
+# Normalize expected frequencies on the same 210-cell space
+expected_sym[mask_sym] <- expected_sym[mask_sym] / sum(expected_sym[mask_sym])
+
+# Observed / expected ratio
+ratio_sym <- matrix(0, nrow = 20, ncol = 20,
+                    dimnames = list(amino_acids, amino_acids))
+ratio_sym[mask_sym] <- contact_freq_sym[mask_sym] / expected_sym[mask_sym]
+
+# Sparse-data Sippl potential
+V_sym <- matrix(0, nrow = 20, ncol = 20,
+                dimnames = list(amino_acids, amino_acids))
+V_sym[mask_sym] <- (log(1 + contact_matrix_sym_sum[mask_sym] * S) - log(1 + contact_matrix_sym_sum[mask_sym] * S * ratio_sym[mask_sym])) * 2.479
+
+# Safety cleanup
 V_asym[!is.finite(V_asym)] <- 0
 V_sym[!is.finite(V_sym)] <- 0
 
