@@ -22,7 +22,8 @@ library(reshape2)
 library(tidyr)
 
 # Define the path to a custom function files
-source("/path/to/your/custom/functions/files/functions.R")
+#source("/path/to/your/custom/functions/files/functions.R")
+source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 
 ### Set up parallelization to speed up computation
 plan(multisession, workers = parallel::detectCores() - 1)
@@ -30,12 +31,13 @@ handlers(global = TRUE)
 handlers("rstudio")
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/whole_interface_potentials/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+results_dir <- "/Users/lorenzosisti/Downloads/whole_new/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
 DistCutoff <- 8.5  
+S <- 0.02
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
@@ -44,6 +46,8 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 set.seed(1234)
 
 all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" 
 
 ### Main processing function for each PDB file
 whole_interface_pmf_from_pdb_set <- function(pdb_path) {
@@ -126,13 +130,13 @@ whole_interface_pmf_from_pdb_set <- function(pdb_path) {
         aa_ag <- strsplit(res_ag, "_")[[1]][1]
         if (aa_ab %in% amino_acids && aa_ag %in% amino_acids) {
           
-          contact_matrix_asym[aa_ab, aa_ag] <- contact_matrix_asym[aa_ab, aa_ag] + 2
+          contact_matrix_asym[aa_ab, aa_ag] <- contact_matrix_asym[aa_ab, aa_ag] + 1
           
           if (aa_ab == aa_ag) {
-            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 2 # homotypic contact
+            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 1 # homotypic contact
           } else {
-            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 2 # heterotypic contact
-            contact_matrix_sym[aa_ag, aa_ab] <- contact_matrix_sym[aa_ag, aa_ab] + 2
+            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 1 # heterotypic contact
+            contact_matrix_sym[aa_ag, aa_ab] <- contact_matrix_sym[aa_ag, aa_ab] + 1
           }
         }
       }
@@ -159,7 +163,10 @@ whole_interface_pmf_from_pdb_set <- function(pdb_path) {
     ))
     
   }, error = function(e) {
-    return(list(ok = FALSE, error = e$message))
+    return(list(ok = FALSE, 
+                filename = file_name,
+                path = pdb_path,
+                error = e$message))
   })
 }
 
@@ -213,13 +220,22 @@ par_plus_epi <- residue_counts_interface_ab_sum + residue_counts_interface_ligan
 residue_freq <- par_plus_epi / sum(par_plus_epi)
 
 # Compute normalized contact frequencies
-asym_lower_tri <- contact_matrix_sym_sum[lower.tri(contact_matrix_sym_sum, diag = TRUE)] # All the symmetrical contact information is in a triangular
-contact_freq_sym <- contact_matrix_sym_sum / sum(asym_lower_tri) 
+#asym_lower_tri <- contact_matrix_sym_sum[lower.tri(contact_matrix_sym_sum, diag = TRUE)] # All the symmetrical contact information is in a triangular NOOOOOOO
+contact_matrix_sym_sum[upper.tri(contact_matrix_sym_sum)] <- 0
+contact_freq_sym <- contact_matrix_sym_sum / sum(contact_matrix_sym_sum) 
 contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 
 # Compute statistical potentials
-V_asym <- -log(contact_freq_asym / outer(paratope_freq, epitope_freq, "*")) * 2.479
-V_sym  <- -log(contact_freq_sym / outer(residue_freq, residue_freq, "*")) * 2.479
+#V_asym <- -log(contact_freq_asym / outer(paratope_freq, epitope_freq, "*")) * 2.479
+#V_sym  <- -log(contact_freq_sym / outer(residue_freq, residue_freq, "*")) * 2.479
+
+### Matrici relative (Expected Probabilities)
+ratio_asym <- contact_freq_asym / outer(paratope_freq, epitope_freq, "*")
+ratio_sym  <- contact_freq_sym  / outer(residue_freq, residue_freq, "*")
+
+V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
+V_sym  <- (log(1 + contact_matrix_sym_sum  * S) - log(1 + contact_matrix_sym_sum  * S * ratio_sym)) * 2.479
+
 V_asym[!is.finite(V_asym)] <- 0
 V_sym[!is.finite(V_sym)] <- 0
 
