@@ -330,3 +330,76 @@ write.csv(asym_df, file = file.path(results_dir, paste0("V_asym_df.csv")))
 
 # Combine both heatmaps into a single plot
 (heatmap_asym_plots | heatmap_sym_plots)
+
+### Check cose di Leonardo nuovo dataset EM ###
+
+sym_df <- melt(V_sym)
+leonardo_V_sym <- read.csv("/Users/lorenzosisti/Downloads/df_symmetric_statistical_potentials_centroids_minimized.csv")
+
+# Filtra e tieni solo le colonne di interesse
+df_all <- leonardo_V_sym %>%
+  filter(part == "all") %>%
+  select(pair, potential)
+
+head(df_all)
+
+## 1) df_all: hai già fatto filter(part=="all") e select(pair, potential)
+##    Assicurati che 'pair' sia tipo "ALA-ARG" (ordine alfabetico con '-')
+
+## 2) Estrai le 210 coppie da V_sym
+stopifnot(is.matrix(V_sym), !is.null(rownames(V_sym)), !is.null(colnames(V_sym)))
+
+idx <- which(lower.tri(V_sym, diag = TRUE), arr.ind = TRUE)
+aa1 <- rownames(V_sym)[idx[,1]]
+aa2 <- colnames(V_sym)[idx[,2]]
+
+## Ordina alfabeticamente ogni coppia per avere una chiave canonica "AAA-BBB"
+pair <- paste(pmin(aa1, aa2), pmax(aa1, aa2), sep = "-")
+val  <- V_sym[idx]
+
+sym_pairs <- data.frame(pair = pair, value = as.numeric(val), stringsAsFactors = FALSE)
+
+sym_pairs_sep <- sym_pairs %>%
+  separate(pair, into = c("aa1", "aa2"), sep = "-")
+
+head(sym_pairs_sep)
+#write.csv(sym_pairs_sep, file = file.path(results_dir, paste0("V_sym_df.csv")))
+
+
+## 3) Unisci con il CSV filtrato
+joined <- merge(df_all, sym_pairs, by = "pair", all = FALSE)
+
+## 4) Correlazioni
+cor_pearson  <- cor(joined$potential, joined$value, method = "pearson",  use = "complete.obs")
+
+###
+
+asym_df <- melt(V_asym)
+
+# Non eseguire questa rinominazione
+asym_df <- asym_df %>%
+  rename(
+    aa1 = Var1,
+    aa2 = Var2
+  )
+
+#write.csv(asym_df, file = file.path(results_dir, paste0("V_asym_df.csv")))
+leonardo_V_asym <- read.csv("/Users/lorenzosisti/Downloads/df_asymmetric_statistical_potentials_centroids_minimized.csv")
+leonardo_V_asym$Var1 <- paste(leonardo_V_asym$resid_ab, "_Ab", sep = "")
+leonardo_V_asym$Var2 <- paste(leonardo_V_asym$resid_ag, "_Ag", sep = "")
+leonardo_V_asym <- leonardo_V_asym[leonardo_V_asym$part == "all",]
+
+
+# Assumendo che asym_df sia già creato con melt(V_asym)
+# E che leonardo_V_asym abbia già le colonne Var1 e Var2
+
+# Merge sui nomi delle coppie ordinate
+merged_df <- merge(asym_df, 
+                   leonardo_V_asym[, c("Var1", "Var2", "potential")],
+                   by = c("Var1", "Var2"))
+
+# Calcolo della correlazione di Pearson
+correlation <- cor(merged_df$value, merged_df$potential, method = "pearson")
+
+(heatmap_asym_plots | heatmap_sym_plots)
+
