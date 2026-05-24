@@ -32,7 +32,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/whole_new/"
+results_dir <- "/Users/lorenzosisti/Downloads/whole_24_maggio/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -108,18 +108,18 @@ whole_interface_pmf_from_pdb_set <- function(pdb_path) {
     residue_counts_interface_ab <- setNames(rep(0, length(amino_acids)), amino_acids)
     residue_counts_interface_ligando <- setNames(rep(0, length(amino_acids)), amino_acids)
     
-    # Populate contact matrices:
+    # Populate contact matrices: 
     
-    # By convention, each contact is counted as bidirectional (i.e., counted twice: once for each residue involved)
+    # By convention, each contact is counted as such:
     
     #  1) contact_matrix_asym → asymmetric (rows = Ab, columns = Ag)
     #     - preserves the orientation of the contact Ab → Ag
-    #     - incremented by +2 for each contact
+    #     - incremented by +1 for each contact
     
     #  2) contact_matrix_sym → symmetric (Ab–Ag and Ag–Ab are equivalent)
     #     - represents the “classical” symmetric statistical potential logic
-    #     - diagonal entries (same amino acid type) are incremented by +2
-    #     - off-diagonal pairs (aa1 ≠ aa2) are incremented by +2 in both directions
+    #     - diagonal entries (same amino acid type) are incremented by +1
+    #     - off-diagonal pairs (aa1 ≠ aa2) are incremented by +1 in both directions
     
     for (res_ab in BS_HL_names) {
       idx_ab <- which(colnames(Inter_DistMat_Bin) == res_ab)
@@ -211,8 +211,6 @@ for (name in names(datasets)) {
 
 ### Compute frequencies and statistical potentials
 
-### Compute frequencies and statistical potentials
-
 # ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
 paratope_freq <- residue_counts_interface_ab_sum / sum(residue_counts_interface_ab_sum)
 epitope_freq  <- residue_counts_interface_ligando_sum / sum(residue_counts_interface_ligando_sum)
@@ -222,7 +220,7 @@ par_plus_epi <- residue_counts_interface_ab_sum + residue_counts_interface_ligan
 residue_freq <- par_plus_epi / sum(par_plus_epi)
 
 # -------------------------
-# ASYMMETRIC
+# ASYMMETRIC: TOP
 # -------------------------
 contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 
@@ -232,7 +230,7 @@ ratio_asym <- contact_freq_asym / expected_asym
 V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
 
 # -------------------------
-# SYMMETRIC
+# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING S IN QUASI-CHEMICAL APPROXIMATION
 # -------------------------
 
 # Keep only the lower triangle (unique unordered pairs)
@@ -244,12 +242,11 @@ contact_freq_sym <- matrix(0, nrow = 20, ncol = 20,
                            dimnames = list(amino_acids, amino_acids))
 contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_matrix_sym_sum[mask_sym])
 
-# Expected frequencies for unordered pairs:
+# Expected frequencies for unordered pairs: QUESTO VA IMMEDIATAMENTE CAMBIATO: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
 # diagonal   -> p_i^2
-# off-diagonal -> 2 * p_i * p_j
+# off-diagonal -> 2 * p_i * p_j ABSOLUTELY NOT
 expected_sym <- outer(residue_freq, residue_freq, "*")
-expected_sym[row(expected_sym) != col(expected_sym)] <-
-  2 * expected_sym[row(expected_sym) != col(expected_sym)]
+#expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] # THIS IS THE PROBLEMATIC VALUE
 
 # Keep only the same lower triangle
 expected_sym[!mask_sym] <- 0
