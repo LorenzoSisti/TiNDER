@@ -242,17 +242,31 @@ contact_freq_sym <- matrix(0, nrow = 20, ncol = 20,
                            dimnames = list(amino_acids, amino_acids))
 contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_matrix_sym_sum[mask_sym])
 
+
+
+
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+##########################################################################################################
+
+
+
+
 # Expected frequencies for unordered pairs: QUESTO VA IMMEDIATAMENTE CAMBIATO: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
 # diagonal   -> p_i^2
-# off-diagonal -> 2 * p_i * p_j ABSOLUTELY NOT
+# off-diagonal -> 2 * p_i * p_j 
 expected_sym <- outer(residue_freq, residue_freq, "*")
-#expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] # THIS IS THE PROBLEMATIC VALUE
+expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] # THIS IS THE PROBLEMATIC VALUE
 
 # Keep only the same lower triangle
 expected_sym[!mask_sym] <- 0
 
-# Normalize expected frequencies on the same 210-cell space
-expected_sym[mask_sym] <- expected_sym[mask_sym] / sum(expected_sym[mask_sym])
+# sum(expected_sym[mask_sym]) = 0.53. Non dovrebbe essere 1?
+
+# Normalize expected frequencies on the same 210-cell space NON STO CAPENDO PERCHE' ABBIA INSERITO QUESTA RIGA
+#expected_sym[mask_sym] <- expected_sym[mask_sym] / sum(expected_sym[mask_sym])
 
 # Observed / expected ratio
 ratio_sym <- matrix(0, nrow = 20, ncol = 20,
@@ -264,9 +278,9 @@ V_sym <- matrix(0, nrow = 20, ncol = 20,
                 dimnames = list(amino_acids, amino_acids))
 V_sym[mask_sym] <- (log(1 + contact_matrix_sym_sum[mask_sym] * S) - log(1 + contact_matrix_sym_sum[mask_sym] * S * ratio_sym[mask_sym])) * 2.479
 
-# Safety cleanup
-V_asym[!is.finite(V_asym)] <- 0
-V_sym[!is.finite(V_sym)] <- 0
+## Safety cleanup se ne occupa già sippl. Eliminiamo.
+#V_asym[!is.finite(V_asym)] <- 0
+#V_sym[!is.finite(V_sym)] <- 0
 
 ### Prepare and plot heatmaps
 # Compute global min/max across both matrices for consistent color scaling
@@ -372,13 +386,6 @@ cor_pearson  <- cor(joined$potential, joined$value, method = "pearson",  use = "
 ###
 
 asym_df <- melt(V_asym)
-
-# Non eseguire questa rinominazione
-asym_df <- asym_df %>%
-  rename(
-    aa1 = Var1,
-    aa2 = Var2
-  )
 
 #write.csv(asym_df, file = file.path(results_dir, paste0("V_asym_df.csv")))
 leonardo_V_asym <- read.csv("/Users/lorenzosisti/Downloads/df_asymmetric_statistical_potentials_centroids_minimized.csv")
