@@ -32,7 +32,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/whole_24_maggio/"
+results_dir <- "/Users/lorenzosisti/Downloads/whole_28_maggio/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -224,13 +224,17 @@ residue_freq <- par_plus_epi / sum(par_plus_epi)
 # -------------------------
 contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 
+# sum(contact_matrix_asym_sum) = 169073
+
 expected_asym <- outer(paratope_freq, epitope_freq, "*")
 ratio_asym <- contact_freq_asym / expected_asym
 
 V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
 
 # -------------------------
-# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING S IN QUASI-CHEMICAL APPROXIMATION
+# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING S IN QUASI-CHEMICAL APPROXIMATION 
+# SIMMETRYC: DUE DADI DELLO STESSO COLORE
+# ASYMMETRIC: DUE DADI DI COLORE DIVERSO
 # -------------------------
 
 # Keep only the lower triangle (unique unordered pairs)
@@ -242,28 +246,25 @@ contact_freq_sym <- matrix(0, nrow = 20, ncol = 20,
                            dimnames = list(amino_acids, amino_acids))
 contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_matrix_sym_sum[mask_sym])
 
-
-
+# sum(contact_matrix_sym_sum[mask_sym]) = 169073
 
 ##########################################################################################################
 ##########################################################################################################
 ##########################################################################################################
 ##########################################################################################################
 ##########################################################################################################
-
-
 
 
 # Expected frequencies for unordered pairs: QUESTO VA IMMEDIATAMENTE CAMBIATO: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
 # diagonal   -> p_i^2
 # off-diagonal -> 2 * p_i * p_j 
 expected_sym <- outer(residue_freq, residue_freq, "*")
-expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] # THIS IS THE PROBLEMATIC VALUE
+expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] 
 
 # Keep only the same lower triangle
 expected_sym[!mask_sym] <- 0
 
-# sum(expected_sym[mask_sym]) = 0.53. Non dovrebbe essere 1?
+# sum(expected_sym[mask_sym]) = 0.53. Non dovrebbe essere 1? SE FAI LA CORREZIONE SU CELLE OFF-DIAGONALE ESCE UNO!!!
 
 # Normalize expected frequencies on the same 210-cell space NON STO CAPENDO PERCHE' ABBIA INSERITO QUESTA RIGA
 #expected_sym[mask_sym] <- expected_sym[mask_sym] / sum(expected_sym[mask_sym])
