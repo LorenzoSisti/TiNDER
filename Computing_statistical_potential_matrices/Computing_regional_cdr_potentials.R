@@ -10,7 +10,7 @@ library(dplyr)    # Necessario per %>% e group_by()
 
 # Cartella contenente i file PDB
 pdb_folder <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_cdr/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_cdr_28_maggio/"
 dir.create(results_dir, showWarnings = FALSE)
 
 pdb_files <- list.files(path = pdb_folder, pattern = "\\.pdb$", full.names = TRUE)
@@ -70,7 +70,7 @@ for (pdb_file in pdb_files) {
     # Lettura della struttura PDB  
     pdb_aus <- read.pdb(pdb_file) 
     chain_HL <- c("H", "L")
-    chain_AG <- "A" # Assicurati che l'antigene sia sempre "A" oppure usa un'esclusione come nel tuo primo script
+    chain_AG <- "A" 
     
     # Coarse-grained representation
     df_coord <- pdb_aus$atom[pdb_aus$atom$type != "HETATM" & (
@@ -271,17 +271,22 @@ for (cdr_name in cdr_index) {
   cm_asym <- contact_matrices_asym_rings_sum[[cdr_name]]
   cm_sym  <- contact_matrices_sym_rings_sum[[cdr_name]]
   
+  mask <- lower.tri(cm_sym, diag = TRUE)
+  n_contatti_reali <- sum(cm_sym[mask]) # Conta i contatti reali (senza raddoppiare gli eterotipici)
+  
+  # n_contatti_reali = sum(cm_asym)
+  
   # Probabilità osservate
   P_obs_asym <- cm_asym / sum(cm_asym)
-  P_obs_sym  <- cm_sym  / sum(cm_sym)
+  P_obs_sym  <- cm_sym[mask]  / sum(cm_sym[mask])
   
   ### Matrici relative (Expected Probabilities)
   ratio_asym <- P_obs_asym / outer(P_par, P_epi, "*")
-  ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*") 
+  ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*")[mask]
   
   ### Formula Log-Odds
   V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479
-  V_sym  <- (log(1 + cm_sym  * S) - log(1 + cm_sym  * S * ratio_sym)) * 2.479
+  V_sym  <- (log(1 + cm_sym  * S) - log(1 + cm_sym  * S * ratio_sym)) * 2.479 #correggi aggiungendo [mask] qui e lì
   
   ### Pulizia infinities / NaN (se cm è 0 o frequenze mancano)
   V_asym[!is.finite(V_asym)] <- 0
