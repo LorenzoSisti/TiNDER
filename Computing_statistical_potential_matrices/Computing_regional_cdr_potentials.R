@@ -1,12 +1,13 @@
 # Caricamento delle librerie necessarie
-library(bio3d)  
-library(reshape2)  
-library(ftrCOOL)  
-library(AATtools)  
-library(ggplot2)
-library(tidyr)
-library(purrr)
-library(dplyr)    # Necessario per %>% e group_by()
+
+pacman::p_load(bio3d, 
+               reshape2,
+               ftrCOOL,
+               AATtools,
+               ggplot2,
+               tidyr,
+               purrr,
+               dplyr)
 
 # Cartella contenente i file PDB
 pdb_folder <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
