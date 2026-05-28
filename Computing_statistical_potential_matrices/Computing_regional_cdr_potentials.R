@@ -281,16 +281,22 @@ for (cdr_name in cdr_index) {
   P_obs_sym  <- cm_sym[mask]  / sum(cm_sym[mask])
   
   ### Matrici relative (Expected Probabilities)
-  ratio_asym <- P_obs_asym / outer(P_par, P_epi, "*")
+  # --- CORREZIONE SIMMETRICA (Fattore 2 e Random Mixing) ---
+  expected_sym_mat <- outer(P_sym, P_sym, "*")
+  # Moltiplica per 2 solo i termini fuori dalla diagonale
+  expected_sym_mat[row(expected_sym_mat) != col(expected_sym_mat)] <- 2 * expected_sym_mat[row(expected_sym_mat) != col(expected_sym_mat)]
+  
+  # Estrai solo i valori della maschera (adesso la somma su mask sarà = 1)
+  ratio_sym  <- P_obs_sym / expected_sym_mat[mask]
   ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*")[mask]
   
   ### Formula Log-Odds
   V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479
-  V_sym  <- (log(1 + cm_sym  * S) - log(1 + cm_sym  * S * ratio_sym)) * 2.479 #correggi aggiungendo [mask] qui e lì
+  V_sym[mask]  <- (log(1 + cm_sym[mask]  * S) - log(1 + cm_sym[mask]  * S * ratio_sym)) * 2.479 
   
   ### Pulizia infinities / NaN (se cm è 0 o frequenze mancano)
-  V_asym[!is.finite(V_asym)] <- 0
-  V_sym[!is.finite(V_sym)]   <- 0
+  #V_asym[!is.finite(V_asym)] <- 0
+  #V_sym[!is.finite(V_sym)]   <- 0
   
   # Salvataggio
   write.csv(V_asym, file.path(results_dir, paste0("V_asym_", cdr_name, ".csv")))
