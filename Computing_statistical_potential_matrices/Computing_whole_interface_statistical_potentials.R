@@ -9,17 +9,17 @@
 #########################################################################################
 
 ### Required libraries
-library(bio3d)
-library(dplyr)
-library(future)
-library(furrr)
-library(purrr)
-library(progressr)
-library(pheatmap)
-library(patchwork)
-library(ggplotify)
-library(reshape2)
-library(tidyr)
+pacman::p_load(bio3d,
+               dplyr,
+               future,
+               furrr,
+               purrr,
+               progressr,
+               pheatmap,
+               patchwork,
+               ggplotify,
+               reshape2,
+               tidyr)
 
 # Define the path to a custom function files
 #source("/path/to/your/custom/functions/files/functions.R")
@@ -32,7 +32,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/whole_28_maggio/"
+results_dir <- "/Users/lorenzosisti/Downloads/whole_1_giugno/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -202,13 +202,6 @@ for (name in names(datasets)) {
   saveRDS(datasets[[name]], file = file.path(results_dir, paste0(name, ".rds")))
 }
 
-### Load saved data for future sessions ###
-
-#contact_matrix_asym_sum <- readRDS(paste(results_dir, "contact_matrix_asym_sum.rds", sep = ""))
-#contact_matrix_sym_sum <- readRDS(paste(results_dir, "contact_matrix_sym_sum.rds", sep = ""))
-#residue_counts_interface_ab_sum <- readRDS(file.path(results_dir, "residue_counts_interface_ab_sum.rds"))
-#residue_counts_interface_ligando_sum <- readRDS(file.path(results_dir, "residue_counts_interface_ligando_sum.rds"))
-
 ### Compute frequencies and statistical potentials
 
 # ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
@@ -220,7 +213,7 @@ par_plus_epi <- residue_counts_interface_ab_sum + residue_counts_interface_ligan
 residue_freq <- par_plus_epi / sum(par_plus_epi)
 
 # -------------------------
-# ASYMMETRIC: TOP
+# ASYMMETRIC POTENTIAL
 # -------------------------
 contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 
@@ -229,12 +222,11 @@ contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
 expected_asym <- outer(paratope_freq, epitope_freq, "*")
 ratio_asym <- contact_freq_asym / expected_asym
 
+# Computing potentials according to Sippl corrections
 V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
 
 # -------------------------
-# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING S IN QUASI-CHEMICAL APPROXIMATION 
-# SIMMETRYC: DUE DADI DELLO STESSO COLORE
-# ASYMMETRIC: DUE DADI DI COLORE DIVERSO
+# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING IN QUASI-CHEMICAL APPROXIMATION 
 # -------------------------
 
 # Keep only the lower triangle (unique unordered pairs)
@@ -251,23 +243,13 @@ contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_mat
 ##########################################################################################################
 ##########################################################################################################
 ##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
 
 # Expected frequencies for unordered pairs: QUESTO VA IMMEDIATAMENTE CAMBIATO: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
 # diagonal   -> p_i^2
 # off-diagonal -> 2 * p_i * p_j 
 expected_sym <- outer(residue_freq, residue_freq, "*")
 expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] 
-
-# Keep only the same lower triangle
 expected_sym[!mask_sym] <- 0
-
-# sum(expected_sym[mask_sym]) = 0.53. Non dovrebbe essere 1? SE FAI LA CORREZIONE SU CELLE OFF-DIAGONALE ESCE UNO!!!
-
-# Normalize expected frequencies on the same 210-cell space NON STO CAPENDO PERCHE' ABBIA INSERITO QUESTA RIGA
-#expected_sym[mask_sym] <- expected_sym[mask_sym] / sum(expected_sym[mask_sym])
 
 # Observed / expected ratio
 ratio_sym <- matrix(0, nrow = 20, ncol = 20,
@@ -278,10 +260,6 @@ ratio_sym[mask_sym] <- contact_freq_sym[mask_sym] / expected_sym[mask_sym]
 V_sym <- matrix(0, nrow = 20, ncol = 20,
                 dimnames = list(amino_acids, amino_acids))
 V_sym[mask_sym] <- (log(1 + contact_matrix_sym_sum[mask_sym] * S) - log(1 + contact_matrix_sym_sum[mask_sym] * S * ratio_sym[mask_sym])) * 2.479
-
-## Safety cleanup se ne occupa già sippl. Eliminiamo.
-#V_asym[!is.finite(V_asym)] <- 0
-#V_sym[!is.finite(V_sym)] <- 0
 
 ### Prepare and plot heatmaps
 # Compute global min/max across both matrices for consistent color scaling
