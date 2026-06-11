@@ -16,7 +16,7 @@ import logging
 import os
 from pathlib import Path
 
-from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB.MMCIFParser import MMCIFParser # Requires biopython environment
 from Bio.PDB import PDBIO
 
 
@@ -42,7 +42,7 @@ def int_to_chain(i, base=62):
 
 
 class OutOfChainsError(Exception):
-"""Raised when more than 62 unique chain IDs are required (limit exceeded)."""
+    """Raised when more than 62 unique chain IDs are required (limit exceeded)."""
     pass
 
 
