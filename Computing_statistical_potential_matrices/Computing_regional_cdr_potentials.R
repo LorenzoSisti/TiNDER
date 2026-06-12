@@ -289,7 +289,7 @@ for (cdr_name in cdr_index) {
   
   # Estrai solo i valori della maschera (adesso la somma su mask sarà = 1)
   ratio_sym  <- P_obs_sym / expected_sym_mat[mask]
-  ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*")[mask]
+  #ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*")[mask] # ← SOVRASCRIVE LA RIGA PRECEDENTE
   
   ### Formula Log-Odds
   V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479

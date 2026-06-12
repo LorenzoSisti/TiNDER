@@ -76,7 +76,10 @@ for (idx in seq_along(ring_pairs)) {
   
   ### ✅ NUOVA FORMULA: Queste sono matrici relative
   ratio_asym <- P_obs_asym / outer(P_par, P_epi, "*")
-  ratio_sym  <- P_obs_sym  / outer(P_sym1, P_sym2, "*")
+  #ratio_sym  <- P_obs_sym  / outer(P_sym1, P_sym2, "*")
+  expected_sym <- outer(P_sym1, P_sym2, "*")
+  expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)]
+  ratio_sym <- P_obs_sym / expected_sym
   
   V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479
   V_sym  <- (log(1 + cm_sym  * S) - log(1 + cm_sym  * S * ratio_sym)) * 2.479
