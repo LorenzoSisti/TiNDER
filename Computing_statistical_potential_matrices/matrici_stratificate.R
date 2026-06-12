@@ -7,11 +7,11 @@ library(bio3d)
 library(dplyr)
 
 ### Setting paths, directories and global variables ###
-#pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-#results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse/" 
-pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
-dir.create(results_dir_intra, showWarnings = FALSE)
+pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+results_dir <- "/Users/lorenzosisti/Downloads/matrici_stratificate_sparse_12_06/" 
+#pdb_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/training_dir/"
+#results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_test_training/g_r_potentials/"
+dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5 # Two residues are defined as "in contact" if the centroids of their side chain are at less than 8.5 Angstroms
 Nsteps <- 3 # Number of concentric "rings" around the interface
@@ -190,20 +190,20 @@ process_pdb_file <- function(s) {
         
         if (chain1 %in% chain_HL && chain2 %in% chain_AG) {
           # antibody → antigen
-          contact_matrices_asym_rings[[pair_key]][aa1, aa2] <- contact_matrices_asym_rings[[pair_key]][aa1, aa2] + 2
+          contact_matrices_asym_rings[[pair_key]][aa1, aa2] <- contact_matrices_asym_rings[[pair_key]][aa1, aa2] + 1
         } else if (chain1 %in% chain_AG && chain2 %in% chain_HL) {
           # antigen → antibody (switch to keep rows = Ab, columns = Ag)
-          contact_matrices_asym_rings[[pair_key]][aa2, aa1] <- contact_matrices_asym_rings[[pair_key]][aa2, aa1] + 2
+          contact_matrices_asym_rings[[pair_key]][aa2, aa1] <- contact_matrices_asym_rings[[pair_key]][aa2, aa1] + 1
         }
         
         ## ---- SYMMETRIC CONTACT MATRICES ----
         # MODIFICATO: Usa 'pair_key' invece di 'assigned_ring'
         
         if (aa1 == aa2) {
-          contact_matrices_sym_rings[[pair_key]][aa1, aa1] <- contact_matrices_sym_rings[[pair_key]][aa1, aa1] + 2
+          contact_matrices_sym_rings[[pair_key]][aa1, aa1] <- contact_matrices_sym_rings[[pair_key]][aa1, aa1] + 1
         } else {
-          contact_matrices_sym_rings[[pair_key]][aa1, aa2] <- contact_matrices_sym_rings[[pair_key]][aa1, aa2] + 2
-          contact_matrices_sym_rings[[pair_key]][aa2, aa1] <- contact_matrices_sym_rings[[pair_key]][aa2, aa1] + 2
+          contact_matrices_sym_rings[[pair_key]][aa1, aa2] <- contact_matrices_sym_rings[[pair_key]][aa1, aa2] + 1
+          contact_matrices_sym_rings[[pair_key]][aa2, aa1] <- contact_matrices_sym_rings[[pair_key]][aa2, aa1] + 1
         }
       } # Fine del blocco if (ring1 == ring2 ...)
     } # Fine del loop 'for (k ...)'

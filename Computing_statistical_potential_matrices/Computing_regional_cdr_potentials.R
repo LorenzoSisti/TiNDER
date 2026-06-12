@@ -11,7 +11,7 @@ pacman::p_load(bio3d,
 
 # Cartella contenente i file PDB
 pdb_folder <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_cdr_28_maggio/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_cdr_12_06/"
 dir.create(results_dir, showWarnings = FALSE)
 
 pdb_files <- list.files(path = pdb_folder, pattern = "\\.pdb$", full.names = TRUE)
@@ -229,15 +229,21 @@ for (cdr_name in cdr_index) {
   
   # Salva Conteggi Residui Anticorpo (Convertiamo la table in data.frame per un CSV più pulito)
   file_counts_ab <- file.path(results_dir, paste0("Residue_Counts_Ab_", cdr_name, ".csv"))
-  df_counts_ab <- as.data.frame(residue_counts_interface_ab_sum[[cdr_name]])
-  colnames(df_counts_ab) <- c("AminoAcid", "Count")
+  df_counts_ab <- data.frame(
+    AminoAcid = names(residue_counts_interface_ab_sum[[cdr_name]]),
+    Count = as.numeric(residue_counts_interface_ab_sum[[cdr_name]])
+  )
+  #colnames(df_counts_ab) <- c("AminoAcid", "Count")
   write.csv(df_counts_ab, file = file_counts_ab, row.names = FALSE)
 }
 
 # Salva Conteggi Residui Antigene (Questo è globale, fuori dal loop delle CDR)
 file_counts_ag <- file.path(results_dir, "Residue_Counts_Ag_Global.csv")
-df_counts_ag <- as.data.frame(residue_counts_interface_ligand_sum)
-colnames(df_counts_ag) <- c("AminoAcid", "Count")
+df_counts_ag <- data.frame(
+  AminoAcid = names(residue_counts_interface_ligand_sum),
+  Count = as.numeric(residue_counts_interface_ligand_sum)
+)
+#colnames(df_counts_ag) <- c("AminoAcid", "Count")
 write.csv(df_counts_ag, file = file_counts_ag, row.names = FALSE)
 
 cat("Salvataggio completato con successo!\n")
@@ -264,7 +270,6 @@ for (cdr_name in cdr_index) {
 
 for (cdr_name in cdr_index) {
   
-  # Frequenze marginali per questa interazione
   P_par  <- cdr_freq[[cdr_name]]
   P_epi  <- antigen_freq
   P_sym  <- sym_freq[[cdr_name]] 
@@ -273,33 +278,28 @@ for (cdr_name in cdr_index) {
   cm_sym  <- contact_matrices_sym_rings_sum[[cdr_name]]
   
   mask <- lower.tri(cm_sym, diag = TRUE)
-  n_contatti_reali <- sum(cm_sym[mask]) # Conta i contatti reali (senza raddoppiare gli eterotipici)
-  
-  # n_contatti_reali = sum(cm_asym)
   
   # Probabilità osservate
   P_obs_asym <- cm_asym / sum(cm_asym)
-  P_obs_sym  <- cm_sym[mask]  / sum(cm_sym[mask])
+  P_obs_sym  <- cm_sym[mask] / sum(cm_sym[mask])
   
-  ### Matrici relative (Expected Probabilities)
-  # --- CORREZIONE SIMMETRICA (Fattore 2 e Random Mixing) ---
+  # ✅ Bug 1 fix: ratio_asym ora è definito
+  ratio_asym <- P_obs_asym / outer(P_par, P_epi, "*")
+  
+  # Correzione quasi-chimica per il simmetrico
   expected_sym_mat <- outer(P_sym, P_sym, "*")
-  # Moltiplica per 2 solo i termini fuori dalla diagonale
   expected_sym_mat[row(expected_sym_mat) != col(expected_sym_mat)] <- 2 * expected_sym_mat[row(expected_sym_mat) != col(expected_sym_mat)]
+  ratio_sym <- P_obs_sym / expected_sym_mat[mask]
   
-  # Estrai solo i valori della maschera (adesso la somma su mask sarà = 1)
-  ratio_sym  <- P_obs_sym / expected_sym_mat[mask]
-  #ratio_sym  <- P_obs_sym  / outer(P_sym, P_sym, "*")[mask] # ← SOVRASCRIVE LA RIGA PRECEDENTE
-  
-  ### Formula Log-Odds
+  # ✅ Bug 2 fix: V_sym inizializzato prima di usare [mask]
   V_asym <- (log(1 + cm_asym * S) - log(1 + cm_asym * S * ratio_asym)) * 2.479
-  V_sym[mask]  <- (log(1 + cm_sym[mask]  * S) - log(1 + cm_sym[mask]  * S * ratio_sym)) * 2.479 
+  V_sym  <- matrix(0, nrow = 20, ncol = 20, dimnames = list(amino_acids, amino_acids))
+  V_sym[mask] <- (log(1 + cm_sym[mask] * S) - log(1 + cm_sym[mask] * S * ratio_sym)) * 2.479
   
-  ### Pulizia infinities / NaN (se cm è 0 o frequenze mancano)
-  #V_asym[!is.finite(V_asym)] <- 0
-  #V_sym[!is.finite(V_sym)]   <- 0
+  # Pulizia infinities / NaN
+  V_asym[!is.finite(V_asym)] <- 0
+  V_sym[!is.finite(V_sym)]   <- 0
   
-  # Salvataggio
   write.csv(V_asym, file.path(results_dir, paste0("V_asym_", cdr_name, ".csv")))
   write.csv(V_sym,  file.path(results_dir, paste0("V_sym_", cdr_name, ".csv")))
 }
