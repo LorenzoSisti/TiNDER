@@ -244,7 +244,7 @@ contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_mat
 ##########################################################################################################
 ##########################################################################################################
 
-# Expected frequencies for unordered pairs: QUESTO VA IMMEDIATAMENTE CAMBIATO: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
+# Expected frequencies for unordered pairs: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
 # diagonal   -> p_i^2
 # off-diagonal -> 2 * p_i * p_j 
 expected_sym <- outer(residue_freq, residue_freq, "*")
