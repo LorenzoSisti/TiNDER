@@ -9,7 +9,7 @@
 #########################################################################################
 
 ### Required libraries
-pacman::p_load(bio3d,dplyr,future,furrr,purrr,progressr,pheatmap,patchwork,ggplotify,reshape2,tidyr)
+pacman::p_load(bio3d,dplyr,future,furrr,purrr,progressr,pheatmap,patchwork,ggplotify,reshape2,tidyr,data.table)
 
 # Define the path to a custom function files
 #source("/path/to/your/custom/functions/files/functions.R")
@@ -22,7 +22,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_12_06/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_25_06_data_table/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -39,158 +39,90 @@ all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names 
 
 # pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" 
 
-### Main processing function for each PDB file
-whole_interface_pmf_from_pdb_set <- function(pdb_path) {
-  
+### Main processing function
+gen_df_contacts <- function(pdb_path) {
+  library(data.table)
   file_name <- basename(pdb_path)
-  
   tryCatch({
-    
-    # Retrieve and read the PDB file
-    pdb_aus <- read.pdb(pdb_path)  
-    chain_HL <- c("H", "L")
-    chain_AG <- "A"
-    
-    # The following step resolves issues due to non-standard residue numbering in antibodies, e.g. insertions like SER100, LYS100A, THR100B, ASN101...
-    # See the custom functions file for further documentation
+    pdb_aus <- read.pdb(pdb_path)
     renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path, log_file = "errors.log")
     if (!renumbered_df$ok) {
       return(list(ok = FALSE, filename = file_name, path = pdb_path, error = renumbered_df$error))
     }
-    df_coord_renumbered <- renumbered_df$df_coord_renumbered
+    dt_coord <- as.data.table(renumbered_df$df_coord_renumbered)
+    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid)]
+    dt_ab <- dt_centroids[chain %in% c("H", "L")]
+    dt_ag <- dt_centroids[!chain %in% c("H", "L")]
     
-    # Compute centroid coordinates for each residue (average of all side-chains atom coordinates)
-    centroidi_df <- as.data.frame(
-      df_coord_renumbered %>%
-        group_by(chain, resno, resid) %>%
-        summarise(x = mean(x), y = mean(y), z = mean(z), .groups = 'drop')
-    )
+    # Costruisci pdb_id nel formato atteso da get_asymmetric_potential
+    ch_h  <- dt_ab[chain == "H", unique(chain)]
+    ch_l  <- dt_ab[chain == "L", unique(chain)]
+    ch_ag <- dt_ag[, unique(chain)]
+    pdb_id_str <- paste(tools::file_path_sans_ext(file_name), ch_h, ch_l, ch_ag, sep = "_")
     
-    res_names <- paste(centroidi_df$resid, centroidi_df$resno, centroidi_df$chain, sep = "_")
-    df_coord_resid_xyz <- centroidi_df[, c("resid", "resno", "x", "y", "z")] 
-    rownames(df_coord_resid_xyz) <- res_names
+    dt_ab[, .dummy := 1L]
+    dt_ag[, .dummy := 1L]
     
-    DistMat <- as.matrix(dist(df_coord_resid_xyz[, c("x", "y", "z")])) # Compute the pairwise Euclidean distance matrix between residue centroids
-    DistMat_bin <- ifelse(DistMat <= DistCutoff, 1, 0) # Binarize the distance matrix: 1 if distance ≤ cutoff, 0 otherwise
-    
-    # Define logical conditions to separate antigen and antibody residues
-    condA <- !(centroidi_df$chain %in% c("H", "L")) # Antigen residues
-    condHL <- centroidi_df$chain %in% c("H", "L") # Antibody residues
-    
-    # Subset the distance matrix to contain only antigen–antibody distances
-    Inter_DistMat <- DistMat[condA, condHL]
-    Inter_DistMat_Bin <- ifelse(Inter_DistMat <= DistCutoff, 1, 0)
-    
-    BS_A <- apply(Inter_DistMat_Bin, 1, sum)
-    BS_A <- BS_A[BS_A != 0]
-    BS_HL <- apply(Inter_DistMat_Bin, 2, sum)
-    BS_HL <- BS_HL[BS_HL != 0]
-    
-    # Get names of residues involved in the interface
-    BS_A_names <- names(BS_A)
-    BS_HL_names <- names(BS_HL)
-    
-    # Initialize contact matrices (asymmetric and symmetric)
-    contact_matrix_asym <- matrix(0, nrow=20, ncol=20, dimnames=list(amino_acids, amino_acids))
-    contact_matrix_sym  <- matrix(0, nrow=20, ncol=20, dimnames=list(amino_acids, amino_acids))
-    
-    # Initialize interface residue counters
-    residue_counts_interface_ab <- setNames(rep(0, length(amino_acids)), amino_acids)
-    residue_counts_interface_ligando <- setNames(rep(0, length(amino_acids)), amino_acids)
-    
-    # Populate contact matrices: 
-    
-    # By convention, each contact is counted as such:
-    
-    #  1) contact_matrix_asym → asymmetric (rows = Ab, columns = Ag)
-    #     - preserves the orientation of the contact Ab → Ag
-    #     - incremented by +1 for each contact
-    
-    #  2) contact_matrix_sym → symmetric (Ab–Ag and Ag–Ab are equivalent)
-    #     - represents the “classical” symmetric statistical potential logic
-    #     - diagonal entries (same amino acid type) are incremented by +1
-    #     - off-diagonal pairs (aa1 ≠ aa2) are incremented by +1 in both directions
-    
-    for (res_ab in BS_HL_names) {
-      idx_ab <- which(colnames(Inter_DistMat_Bin) == res_ab)
-      contacts <- which(Inter_DistMat_Bin[, idx_ab] == 1)
-      for (idx_ag in contacts) {
-        res_ag <- rownames(Inter_DistMat_Bin)[idx_ag]
-        aa_ab <- strsplit(res_ab, "_")[[1]][1]
-        aa_ag <- strsplit(res_ag, "_")[[1]][1]
-        if (aa_ab %in% amino_acids && aa_ag %in% amino_acids) {
-          
-          contact_matrix_asym[aa_ab, aa_ag] <- contact_matrix_asym[aa_ab, aa_ag] + 1
-          
-          if (aa_ab == aa_ag) {
-            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 1 # homotypic contact
-          } else {
-            contact_matrix_sym[aa_ab, aa_ag] <- contact_matrix_sym[aa_ab, aa_ag] + 1 # heterotypic contact
-            contact_matrix_sym[aa_ag, aa_ab] <- contact_matrix_sym[aa_ag, aa_ab] + 1
-          }
-        }
-      }
-    }
-    
-    
-    # Count residue occurrences at the interface
-    df_centroidi_anticorpo <- centroidi_df[centroidi_df$chain %in% chain_HL, ]
-    rownames(df_centroidi_anticorpo) <- paste(df_centroidi_anticorpo$resid, df_centroidi_anticorpo$resno, df_centroidi_anticorpo$chain, sep = "_")
-    df_centroidi_anticorpo_bs <- df_centroidi_anticorpo[rownames(df_centroidi_anticorpo) %in% BS_HL_names, ]
-    residue_counts_interface_ab <- residue_counts_interface_ab + table(factor(df_centroidi_anticorpo_bs$resid, levels = amino_acids))
-    
-    df_centroidi_ligando <- centroidi_df[centroidi_df$chain %in% chain_AG, ]
-    rownames(df_centroidi_ligando) <- paste(df_centroidi_ligando$resid, df_centroidi_ligando$resno, df_centroidi_ligando$chain, sep = "_")
-    df_centroidi_ligando_bs <- df_centroidi_ligando[rownames(df_centroidi_ligando) %in% BS_A_names, ]
-    residue_counts_interface_ligando <- residue_counts_interface_ligando + table(factor(df_centroidi_ligando_bs$resid, levels = amino_acids))
-    
-    return(list(
-      ok = TRUE,
-      contact_matrix_asym = contact_matrix_asym,
-      contact_matrix_sym  = contact_matrix_sym,
-      residue_counts_interface_ab = residue_counts_interface_ab,
-      residue_counts_interface_ligando = residue_counts_interface_ligando
-    ))
-    
+    dt_contacts <- dt_ab[dt_ag, on = ".dummy", allow.cartesian = TRUE] |>
+      _[, dist := sqrt((x - i.x)^2 + (y - i.y)^2 + (z - i.z)^2)] |>
+      _[dist <= DistCutoff] |>
+      _[resid %in% amino_acids & i.resid %in% amino_acids] |>
+      _[, .(
+        pdb_id   = pdb_id_str,
+        resid_ab = resid,
+        resno_ab = resno,
+        chain_ab = chain,
+        resid_ag = i.resid,
+        resno_ag = i.resno,
+        chain_ag = i.chain
+      )]
+    return(list(ok = TRUE, contacts = dt_contacts))
   }, error = function(e) {
-    return(list(ok = FALSE, 
-                filename = file_name,
-                path = pdb_path,
-                error = e$message))
+    return(list(ok = FALSE, filename = file_name, path = pdb_path, error = e$message))
   })
 }
 
-### Run the function on all PDB files in parallel
+### Esegui in parallelo
 with_progress({
-  results_list <- future_map(all_pdbs, whole_interface_pmf_from_pdb_set, .options  = furrr_options(seed = TRUE), .progress = TRUE)
+  results_list <- future_map(
+    all_pdbs,
+    gen_df_contacts,   # <- nome corretto della funzione
+    .options = furrr_options(seed = TRUE),
+    .progress = TRUE
+  )
 })
 
-### Filter valid results and handle failed files
+### Filtra risultati validi
 valid_results <- keep(results_list, ~ .x$ok)
-failed_files <- map_chr(discard(results_list, ~ .x$ok), "filename")
-cat("Totale file falliti:", length(failed_files), "\n")
+failed_files  <- map_chr(discard(results_list, ~ .x$ok), "filename")
+cat("File falliti:", length(failed_files), "\n")
 if (length(failed_files) > 0) {
-  writeLines(failed_files, con = file.path(results_dir, "failed_files.txt"))
+  writeLines(failed_files, file.path(results_dir, "failed_files.txt"))
 }
 
-### Sum all contact matrices and residue counts
-contact_matrix_asym_sum <- Reduce(`+`, map(valid_results, "contact_matrix_asym"))
-contact_matrix_sym_sum  <- Reduce(`+`, map(valid_results, "contact_matrix_sym"))
-residue_counts_interface_ab_sum       <- Reduce(`+`, map(valid_results, "residue_counts_interface_ab"))
-residue_counts_interface_ligando_sum  <- Reduce(`+`, map(valid_results, "residue_counts_interface_ligando"))
-
-### Save combined results (CSV and RDS)
-datasets <- list(
-  contact_matrix_asym_sum              = contact_matrix_asym_sum,
-  contact_matrix_sym_sum               = contact_matrix_sym_sum,
-  residue_counts_interface_ab_sum      = residue_counts_interface_ab_sum,
-  residue_counts_interface_ligando_sum = residue_counts_interface_ligando_sum
+### Combina tutti i contatti
+df_contacts <- rbindlist(
+  map(valid_results, "contacts"),
+  use.names = TRUE
 )
 
-for (name in names(datasets)) {
-  write.csv(datasets[[name]], file = file.path(results_dir, paste0(name, ".csv")), row.names = TRUE)
-  saveRDS(datasets[[name]], file = file.path(results_dir, paste0(name, ".rds")))
-}
+### Conteggi residui all'interfaccia
+residue_counts_ab <- df_contacts[, .(resid_ab, resno_ab, chain_ab, pdb_id)] |>
+  unique() |>
+  _[, .N, by = resid_ab]
+
+residue_counts_ag <- df_contacts[, .(resid_ag, resno_ag, chain_ag, pdb_id)] |>
+  unique() |>
+  _[, .N, by = resid_ag]
+
+### Salvataggio
+saveRDS(df_contacts,      file.path(results_dir, "df_contacts.rds"))
+saveRDS(residue_counts_ab, file.path(results_dir, "residue_counts_ab.rds"))
+saveRDS(residue_counts_ag, file.path(results_dir, "residue_counts_ag.rds"))
+
+fwrite(df_contacts,       file.path(results_dir, "df_contacts.csv"))
+fwrite(residue_counts_ab, file.path(results_dir, "residue_counts_ab.csv"))
+fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 
 ### Compute frequencies and statistical potentials
 
