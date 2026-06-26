@@ -9,7 +9,7 @@
 #########################################################################################
 
 # DA IMPLEMENTARE FUNZIONE PER POTENZIALI SIMMETRICI
-# DA IMPLEMENTARE CALCOLO pmf SECONDO SIPPL
+# VERIFICA PERCHE' NELLE RIGHE CON VALORE ZERO NON CI SONO NOMI DEGLI AMMINACIDI
 
 ### Required libraries
 pacman::p_load(bio3d,dplyr,future,furrr,purrr,progressr,pheatmap,patchwork,ggplotify,reshape2,tidyr,data.table)
@@ -143,12 +143,12 @@ fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 # L2: 50:56
 # L3: 89:97
 get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
+  df_contacts <- copy(df_contacts)
   aa <- aa.table$aa3[1:20]
   kBT <- 2.479
   
   all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
-    _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
-    _[, .(pair)]
+    _[, pair := paste(resid_ab, resid_ag, sep = "-")]
   
   df_contacts <- df_contacts |>
     _[(resid_ab %in% aa) & (resid_ag %in% aa)] |>
@@ -157,42 +157,28 @@ get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   if (part == 'all') {
     df_contacts <- df_contacts
   } else if (part == 'l1') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
+    df_contacts <- df_contacts[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
   } else if (part == 'l2') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
+    df_contacts <- df_contacts[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
   } else if (part == 'l3') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
+    df_contacts <- df_contacts[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
   } else if (part == 'h1') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
+    df_contacts <- df_contacts[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
   } else if (part == 'h2') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
+    df_contacts <- df_contacts[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
   } else if (part == 'h3') {
-    df_contacts <- df_contacts |>
-      _[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
+    df_contacts <- df_contacts[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
   } else {
     stop("Invalid value for 'part'. Use one of: 'l1', 'l2', 'l3', 'h1', 'h2', 'h3', or 'all'.")
   }
   
-  df_fxy <- df_contacts |>
-    _[, .(count = .N), by = .(resid_ag, resid_ab)] |>
-    _[, freq := count / sum(count)]
-  
-  df_fx <- df_contacts |>
-    _[, .(count = .N), by = resid_ag] |>
-    _[, freq := count / sum(count)]
-  
-  df_fy <- df_contacts |>
-    _[, .(count = .N), by = resid_ab] |>
-    _[, freq := count / sum(count)]
+  df_fxy <- df_contacts[, .(count = .N), by = .(resid_ag, resid_ab)][, freq := count / sum(count)]
+  df_fx  <- df_contacts[, .(count = .N), by = resid_ag][, freq := count / sum(count)]
+  df_fy  <- df_contacts[, .(count = .N), by = resid_ab][, freq := count / sum(count)]
   
   df_potential <- df_fxy |>
     _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
-    _[, .(pair, resid_ag, resid_ab, freq, count)] |>          # <- mantieni 'count'
+    _[, .(pair, resid_ag, resid_ab, freq, count)] |>
     _[df_fx[, .(freq_ag = freq), by = resid_ag], on = "resid_ag"] |>
     _[df_fy[, .(freq_ab = freq), by = resid_ab], on = "resid_ab"] |>
     _[, potential := kBT * log(1 + count * sigma) -
@@ -200,10 +186,11 @@ get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   
   df_potential_complete <- merge(
     all_pairs,
-    df_potential,
+    df_potential[, .(pair, potential)],
     by = "pair",
     all.x = TRUE
   )[, .(resid_ag, resid_ab, potential)] |>
+    _[, potential := fifelse(is.na(potential), 0, potential)] |>
     _[, part := part]
   
   return(df_potential_complete)
