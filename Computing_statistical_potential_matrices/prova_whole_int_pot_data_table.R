@@ -8,6 +8,9 @@
 # 5) VISUALIZING THE RESULTS AS HEATMAPS.
 #########################################################################################
 
+# DA IMPLEMENTARE FUNZIONE PER POTENZIALI SIMMETRICI
+# DA IMPLEMENTARE CALCOLO pmf SECONDO SIPPL
+
 ### Required libraries
 pacman::p_load(bio3d,dplyr,future,furrr,purrr,progressr,pheatmap,patchwork,ggplotify,reshape2,tidyr,data.table)
 
@@ -22,7 +25,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -130,7 +133,7 @@ fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 # F(x,y) -> df_fxy
 # F(x) -> df_fx
 # F(y) -> df_fy
-# E(x,y) = ln(F(x,y) / (F(x) * F(y))) * 2.479
+# E(x,y) = - ln(F(x,y) / (F(x) * F(y))) * 2.479
 # 
 # H1: 26:32
 # H2: 52:56
@@ -139,8 +142,10 @@ fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 # L1: 24:34
 # L2: 50:56
 # L3: 89:97
-get_asymmetric_potential <- function(df_contacts, part = 'all') {
+get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   aa <- aa.table$aa3[1:20]
+  kBT <- 2.479
+  
   all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
     _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
     _[, .(pair)]
@@ -186,11 +191,12 @@ get_asymmetric_potential <- function(df_contacts, part = 'all') {
     _[, freq := count / sum(count)]
   
   df_potential <- df_fxy |>
-    _[,  pair := paste(resid_ab, resid_ag, sep = "-")] |>
-    _[, .(pair, resid_ag, resid_ab, freq)] |>
+    _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
+    _[, .(pair, resid_ag, resid_ab, freq, count)] |>          # <- mantieni 'count'
     _[df_fx[, .(freq_ag = freq), by = resid_ag], on = "resid_ag"] |>
     _[df_fy[, .(freq_ab = freq), by = resid_ab], on = "resid_ab"] |>
-    _[, potential := -log(freq/(freq_ag * freq_ab)) * 2.479]
+    _[, potential := kBT * log(1 + count * sigma) -
+        kBT * log(1 + count * sigma * (freq / (freq_ag * freq_ab)))]
   
   df_potential_complete <- merge(
     all_pairs,
@@ -202,7 +208,6 @@ get_asymmetric_potential <- function(df_contacts, part = 'all') {
   
   return(df_potential_complete)
 }
-
 
 parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
 
@@ -219,8 +224,18 @@ saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.
 fwrite(df_potential_combined,       file.path(results_dir, "whole_int_asym_potential.csv"))
 
 
+potenziale_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_asym_potential.csv")
+potenziale_non_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table/whole_int_asym_potential.csv")
 
+sum(is.na(potenziale_sippl$potential))
+sum(is.na(potenziale_non_sippl$potential))
 
+# Le coppie con NA sono esattamente le stesse nei due file?
+na_sippl     <- which(is.na(potenziale_sippl$potential))
+na_non_sippl <- which(is.na(potenziale_non_sippl$potential))
+identical(na_sippl, na_non_sippl)
+
+correlazione_potenziali <- cor(potenziale_sippl$potential, potenziale_non_sippl$potential)
 
 # ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
 paratope_freq <- residue_counts_interface_ab_sum / sum(residue_counts_interface_ab_sum)
