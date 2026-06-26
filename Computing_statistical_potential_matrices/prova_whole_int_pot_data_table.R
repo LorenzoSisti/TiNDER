@@ -196,7 +196,82 @@ get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   return(df_potential_complete)
 }
 
+get_symmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
+  df_contacts <- copy(df_contacts)
+  aa <- aa.table$aa3[1:20]
+  kBT <- 2.479
+  
+  # Tutte le 210 coppie non ordinate (i <= j alfabeticamente, evita duplicati ARG-LYS / LYS-ARG)
+  all_pairs <- CJ(resid_i = aa, resid_j = aa) |>
+    _[resid_i <= resid_j] |>
+    _[, pair := paste(resid_i, resid_j, sep = "-")]
+  
+  df_contacts <- df_contacts |>
+    _[(resid_ab %in% aa) & (resid_ag %in% aa)] |>
+    _[, c("pdb_id", "ch_h", "ch_l", "ch_ag") := tstrsplit(pdb_id, "_")]
+  
+  if (part == 'all') {
+    df_contacts <- df_contacts
+  } else if (part == 'l1') {
+    df_contacts <- df_contacts[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
+  } else if (part == 'l2') {
+    df_contacts <- df_contacts[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
+  } else if (part == 'l3') {
+    df_contacts <- df_contacts[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
+  } else if (part == 'h1') {
+    df_contacts <- df_contacts[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
+  } else if (part == 'h2') {
+    df_contacts <- df_contacts[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
+  } else if (part == 'h3') {
+    df_contacts <- df_contacts[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
+  } else {
+    stop("Invalid value for 'part'. Use one of: 'l1', 'l2', 'l3', 'h1', 'h2', 'h3', or 'all'.")
+  }
+  
+  # Etichetta non ordinata per ogni contatto: resid_i <= resid_j alfabeticamente
+  df_contacts <- df_contacts |>
+    _[, `:=`(
+      resid_i = fifelse(resid_ab <= resid_ag, resid_ab, resid_ag),
+      resid_j = fifelse(resid_ab <= resid_ag, resid_ag, resid_ab)
+    )]
+  
+  # F(x,y): frequenza osservata della coppia non ordinata
+  df_fxy <- df_contacts[, .(count = .N), by = .(resid_i, resid_j)][, freq := count / sum(count)]
+  
+  # F(x): UNICA distribuzione marginale, ottenuta mettendo insieme ab e ag
+  df_pool <- rbindlist(list(
+    df_contacts[, .(resid = resid_ab)],
+    df_contacts[, .(resid = resid_ag)]
+  ))
+  df_f <- df_pool[, .(count = .N), by = resid][, freq := count / sum(count)]
+  
+  freq_i_dt <- df_f[, .(resid_i = resid, freq_i = freq)]
+  freq_j_dt <- df_f[, .(resid_j = resid, freq_j = freq)]
+  
+  df_potential <- df_fxy |>
+    _[, pair := paste(resid_i, resid_j, sep = "-")] |>
+    _[, .(pair, resid_i, resid_j, freq, count)] |>
+    _[freq_i_dt, on = "resid_i"] |>
+    _[freq_j_dt, on = "resid_j"] |>
+    _[, ref_freq := fifelse(resid_i == resid_j, freq_i * freq_j, 2 * freq_i * freq_j)] |>
+    _[, potential := kBT * log(1 + count * sigma) -
+        kBT * log(1 + count * sigma * (freq / ref_freq))]
+  
+  df_potential_complete <- merge(
+    all_pairs,
+    df_potential[, .(pair, potential)],
+    by = "pair",
+    all.x = TRUE
+  )[, .(resid_i, resid_j, potential)] |>
+    _[, potential := fifelse(is.na(potential), 0, potential)] |>
+    _[, part := part]
+  
+  return(df_potential_complete)
+}
+
 parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
+
+### ASYM ###
 
 potentials_list <- map(parts, ~ get_asymmetric_potential(df_contacts, part = .x))
 names(potentials_list) <- parts
@@ -210,17 +285,36 @@ saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.
 
 fwrite(df_potential_combined,       file.path(results_dir, "whole_int_asym_potential.csv"))
 
+### SYM ###
+
+sym_potentials_list <- map(parts, ~ get_symmetric_potential(df_contacts, part = .x))
+names(sym_potentials_list) <- parts
+
+# Unisci tutto in un'unica tabella lunga, già con la colonna `part` per distinguerle
+df_sym_potential_combined <- rbindlist(sym_potentials_list)
+
+df_sym_potential_combined
+
+saveRDS(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.rds"))
+
+fwrite(df_sym_potential_combined,       file.path(results_dir, "whole_int_sym_potential.csv"))
+
+
+leonardo_V_asym <- read.csv("/Users/lorenzosisti/Downloads/df_asymmetric_statistical_potentials_centroids_minimized.csv")
+leonardo_V_sym <- read.csv("/Users/lorenzosisti/Downloads/df_symmetric_statistical_potentials_centroids_minimized.csv")
+potenziale_sippl_asym <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_asym_potential.csv")
+potenziale_sippl_sym <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_sym_potential.csv")
+
+
+
+
+
+
+
 
 potenziale_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_asym_potential.csv")
 potenziale_non_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table/whole_int_asym_potential.csv")
 
-sum(is.na(potenziale_sippl$potential))
-sum(is.na(potenziale_non_sippl$potential))
-
-# Le coppie con NA sono esattamente le stesse nei due file?
-na_sippl     <- which(is.na(potenziale_sippl$potential))
-na_non_sippl <- which(is.na(potenziale_non_sippl$potential))
-identical(na_sippl, na_non_sippl)
 
 correlazione_potenziali <- cor(potenziale_sippl$potential, potenziale_non_sippl$potential)
 
