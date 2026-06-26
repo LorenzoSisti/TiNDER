@@ -126,6 +126,91 @@ fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 
 ### Compute frequencies and statistical potentials
 
+# # ASYMMETRIC PART
+# F(x,y) -> df_fxy
+# F(x) -> df_fx
+# F(y) -> df_fy
+# E(x,y) = ln(F(x,y) / (F(x) * F(y))) * 2.479
+# 
+# H1: 26:32
+# H2: 52:56
+# H3: 95:102
+# 
+# L1: 24:34
+# L2: 50:56
+# L3: 89:97
+get_asymmetric_potential <- function(df_contacts, part = 'all') {
+  aa <- aa.table$aa3[1:20]
+  all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
+    _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
+    _[, .(pair)]
+  
+  df_contacts <- df_contacts |>
+    _[(resid_ab %in% aa) & (resid_ag %in% aa)] |>
+    _[, c("pdb_id", "ch_h", "ch_l", "ch_ag") := tstrsplit(pdb_id, "_")]
+  
+  if (part == 'all') {
+    df_contacts <- df_contacts
+  } else if (part == 'l1') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
+  } else if (part == 'l2') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
+  } else if (part == 'l3') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
+  } else if (part == 'h1') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
+  } else if (part == 'h2') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
+  } else if (part == 'h3') {
+    df_contacts <- df_contacts |>
+      _[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
+  } else {
+    stop("Invalid value for 'part'. Use one of: 'l1', 'l2', 'l3', 'h1', 'h2', 'h3', or 'all'.")
+  }
+  
+  df_fxy <- df_contacts |>
+    _[, .(count = .N), by = .(resid_ag, resid_ab)] |>
+    _[, freq := count / sum(count)]
+  
+  df_fx <- df_contacts |>
+    _[, .(count = .N), by = resid_ag] |>
+    _[, freq := count / sum(count)]
+  
+  df_fy <- df_contacts |>
+    _[, .(count = .N), by = resid_ab] |>
+    _[, freq := count / sum(count)]
+  
+  df_potential <- df_fxy |>
+    _[,  pair := paste(resid_ab, resid_ag, sep = "-")] |>
+    _[, .(pair, resid_ag, resid_ab, freq)] |>
+    _[df_fx[, .(freq_ag = freq), by = resid_ag], on = "resid_ag"] |>
+    _[df_fy[, .(freq_ab = freq), by = resid_ab], on = "resid_ab"] |>
+    _[, potential := -log(freq/(freq_ag * freq_ab)) * 2.479]
+  
+  df_potential_complete <- merge(
+    all_pairs,
+    df_potential,
+    by = "pair",
+    all.x = TRUE
+  )[, .(resid_ag, resid_ab, potential)] |>
+    _[, part := part]
+  
+  return(df_potential_complete)
+}
+
+
+
+
+
+
+
+
+
 # ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
 paratope_freq <- residue_counts_interface_ab_sum / sum(residue_counts_interface_ab_sum)
 epitope_freq  <- residue_counts_interface_ligando_sum / sum(residue_counts_interface_ligando_sum)
