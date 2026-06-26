@@ -41,7 +41,7 @@ all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names 
 
 ### Main processing function
 gen_df_contacts <- function(pdb_path) {
-  library(data.table)
+  aa <- aa.table$aa3[1:20]
   file_name <- basename(pdb_path)
   tryCatch({
     pdb_aus <- read.pdb(pdb_path)
@@ -66,7 +66,7 @@ gen_df_contacts <- function(pdb_path) {
     dt_contacts <- dt_ab[dt_ag, on = ".dummy", allow.cartesian = TRUE] |>
       _[, dist := sqrt((x - i.x)^2 + (y - i.y)^2 + (z - i.z)^2)] |>
       _[dist <= DistCutoff] |>
-      _[resid %in% amino_acids & i.resid %in% amino_acids] |>
+      _[resid %in% aa & i.resid %in% aa] |>
       _[, .(
         pdb_id   = pdb_id_str,
         resid_ab = resid,
