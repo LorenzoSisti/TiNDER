@@ -22,7 +22,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_25_06_data_table/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -204,8 +204,19 @@ get_asymmetric_potential <- function(df_contacts, part = 'all') {
 }
 
 
+parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
 
+potentials_list <- map(parts, ~ get_asymmetric_potential(df_contacts, part = .x))
+names(potentials_list) <- parts
 
+# Unisci tutto in un'unica tabella lunga, già con la colonna `part` per distinguerle
+df_potential_combined <- rbindlist(potentials_list)
+
+df_potential_combined
+
+saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.rds"))
+
+fwrite(df_potential_combined,       file.path(results_dir, "whole_int_asym_potential.csv"))
 
 
 
