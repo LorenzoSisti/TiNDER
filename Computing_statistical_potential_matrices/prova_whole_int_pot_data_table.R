@@ -8,11 +8,9 @@
 # 5) VISUALIZING THE RESULTS AS HEATMAPS.
 #########################################################################################
 
-# DA IMPLEMENTARE FUNZIONE PER POTENZIALI SIMMETRICI
-# VERIFICA PERCHE' NELLE RIGHE CON VALORE ZERO NON CI SONO NOMI DEGLI AMMINACIDI
-
 ### Required libraries
-pacman::p_load(bio3d,dplyr,future,furrr,purrr,progressr,pheatmap,patchwork,ggplotify,reshape2,tidyr,data.table)
+pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2)
 
 # Define the path to a custom function files
 #source("/path/to/your/custom/functions/files/functions.R")
@@ -25,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -300,205 +298,85 @@ saveRDS(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potenti
 fwrite(df_sym_potential_combined,       file.path(results_dir, "whole_int_sym_potential.csv"))
 
 
-leonardo_V_asym <- read.csv("/Users/lorenzosisti/Downloads/df_asymmetric_statistical_potentials_centroids_minimized.csv")
-leonardo_V_sym <- read.csv("/Users/lorenzosisti/Downloads/df_symmetric_statistical_potentials_centroids_minimized.csv")
-potenziale_sippl_asym <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_asym_potential.csv")
-potenziale_sippl_sym <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_sym_potential.csv")
+### Costruisce la matrice 20x20 a partire dal data.table long
+build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, aa_order = amino_acids) {
+  
+  dt <- df_potential[part == part_name]
+  
+  if (!symmetric) {
+    # Caso asimmetrico: righe = resid_ab, colonne = resid_ag
+    mat_dt <- dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
+    rn  <- mat_dt$resid_ab
+    mat <- as.matrix(mat_dt[, -1, with = FALSE])
+    rownames(mat) <- rn
+  } else {
+    # Caso simmetrico: la tabella ha solo resid_i <= resid_j -> va "specchiata"
+    dt_full <- rbindlist(list(
+      dt[, .(resid_i, resid_j, potential)],
+      dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
+    ))
+    mat_dt <- dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
+    rn  <- mat_dt$resid_i
+    mat <- as.matrix(mat_dt[, -1, with = FALSE])
+    rownames(mat) <- rn
+  }
+  
+  # Riordina righe/colonne secondo la scala Kyte-Doolittle
+  mat <- mat[aa_order, aa_order]
+  
+  return(mat)
+}
+
+### Genera (e opzionalmente salva) l'heatmap per un singolo 'part'
+plot_potential_heatmap <- function(df_potential,
+                                   part_name,
+                                   symmetric  = FALSE,
+                                   aa_order   = amino_acids,
+                                   title_prefix = "Whole-Interface Potential",
+                                   save_dir   = results_dir,
+                                   save       = TRUE,
+                                   width = 7, height = 6) {
+  
+  mat <- build_potential_matrix(df_potential, part_name, symmetric = symmetric, aa_order = aa_order)
+  
+  pot_min <- min(mat, na.rm = TRUE)
+  pot_max <- max(mat, na.rm = TRUE)
+  lim     <- max(abs(pot_min), abs(pot_max))
+  
+  type_label <- if (symmetric) "Symmetric" else "Asymmetric"
+  main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
+  
+  p <- pheatmap(mat,
+                color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
+                breaks = seq(-lim, lim, length.out = 51),
+                cluster_rows = FALSE,
+                cluster_cols = FALSE,
+                main = main_title,
+                display_numbers = FALSE,
+                fontsize = 10,
+                silent = TRUE)
+  
+  gg_heatmap <- as.ggplot(p$gtable)
+  
+  if (save) {
+    file_suffix <- if (symmetric) "sym" else "asym"
+    file_name   <- paste0("heatmap_", file_suffix, "_", part_name, ".png")
+    ggsave(filename = file.path(save_dir, file_name),
+           plot = gg_heatmap, width = width, height = height, dpi = 300, bg = "white")
+  }
+  
+  return(gg_heatmap)
+}
 
 
+### Heatmap per il potenziale asimmetrico
+heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
+                                                     part_name = .x,
+                                                     symmetric = FALSE))
+names(heatmaps_asym) <- parts
 
-
-
-
-
-
-potenziale_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table_sippl/whole_int_asym_potential.csv")
-potenziale_non_sippl <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_26_06_data_table/whole_int_asym_potential.csv")
-
-
-correlazione_potenziali <- cor(potenziale_sippl$potential, potenziale_non_sippl$potential)
-
-# ASYMMETRIC approach: Compute amino acid frequencies for antibody (paratope) and antigen (epitope)
-paratope_freq <- residue_counts_interface_ab_sum / sum(residue_counts_interface_ab_sum)
-epitope_freq  <- residue_counts_interface_ligando_sum / sum(residue_counts_interface_ligando_sum)
-
-# SYMMETRIC approach: Combine counts from both chains and compute normalized frequencies
-par_plus_epi <- residue_counts_interface_ab_sum + residue_counts_interface_ligando_sum
-residue_freq <- par_plus_epi / sum(par_plus_epi)
-
-# -------------------------
-# ASYMMETRIC POTENTIAL
-# -------------------------
-contact_freq_asym <- contact_matrix_asym_sum / sum(contact_matrix_asym_sum)
-
-# sum(contact_matrix_asym_sum) = 169073
-
-expected_asym <- outer(paratope_freq, epitope_freq, "*")
-ratio_asym <- contact_freq_asym / expected_asym
-
-# Computing potentials according to Sippl corrections
-V_asym <- (log(1 + contact_matrix_asym_sum * S) - log(1 + contact_matrix_asym_sum * S * ratio_asym)) * 2.479
-
-# -------------------------
-# SYMMETRIC: ADJUSTING REFERENCE STATE ACCORDING TO RANDOM MIXING IN QUASI-CHEMICAL APPROXIMATION 
-# -------------------------
-
-# Keep only the lower triangle (unique unordered pairs)
-mask_sym <- lower.tri(contact_matrix_sym_sum, diag = TRUE)
-contact_matrix_sym_sum[!mask_sym] <- 0
-
-# Observed frequencies on the 210 unique pairs
-contact_freq_sym <- matrix(0, nrow = 20, ncol = 20,
-                           dimnames = list(amino_acids, amino_acids))
-contact_freq_sym[mask_sym] <- contact_matrix_sym_sum[mask_sym] / sum(contact_matrix_sym_sum[mask_sym])
-
-# sum(contact_matrix_sym_sum[mask_sym]) = 169073
-
-##########################################################################################################
-##########################################################################################################
-##########################################################################################################
-
-# Expected frequencies for unordered pairs: MIYAZAWA-JERNIGAN 1985 IN THE QUASI-CHEMICAL APPROX I HAVE RANDOM MIXING AS THE REFERENCE
-# diagonal   -> p_i^2
-# off-diagonal -> 2 * p_i * p_j 
-expected_sym <- outer(residue_freq, residue_freq, "*")
-expected_sym[row(expected_sym) != col(expected_sym)] <- 2 * expected_sym[row(expected_sym) != col(expected_sym)] 
-expected_sym[!mask_sym] <- 0
-
-# Observed / expected ratio
-ratio_sym <- matrix(0, nrow = 20, ncol = 20,
-                    dimnames = list(amino_acids, amino_acids))
-ratio_sym[mask_sym] <- contact_freq_sym[mask_sym] / expected_sym[mask_sym]
-
-# Sparse-data Sippl potential
-V_sym <- matrix(0, nrow = 20, ncol = 20,
-                dimnames = list(amino_acids, amino_acids))
-V_sym[mask_sym] <- (log(1 + contact_matrix_sym_sum[mask_sym] * S) - log(1 + contact_matrix_sym_sum[mask_sym] * S * ratio_sym[mask_sym])) * 2.479
-
-### Prepare and plot heatmaps
-# Compute global min/max across both matrices for consistent color scaling
-pot_min <- abs(min(min(V_sym), min(V_asym)))
-pot_max <- abs(max(max(V_sym), max(V_asym)))
-# Assign row/column names for the asymmetric heatmap
-rownames(V_asym) <- paste(amino_acids, "Ab", sep = "_")
-colnames(V_asym) <- paste(amino_acids, "Ag", sep = "_")
-
-p_asym <- pheatmap(V_asym,
-                   color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
-                   breaks = seq(- max(pot_min, pot_max), max(pot_min, pot_max), length.out = 51),
-                   cluster_rows = FALSE,
-                   cluster_cols = FALSE,
-                   main = paste("Asymmetric Potential"),
-                   display_numbers = FALSE,
-                   fontsize = 10)
-#silent = TRUE) 
-heatmap_asym_plots <- as.ggplot(p_asym$gtable)
-
-p_sym <- pheatmap(V_sym,
-                  color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
-                  breaks = seq(- max(pot_min, pot_max), max(pot_min, pot_max), length.out = 51),
-                  cluster_rows = FALSE,
-                  cluster_cols = FALSE,
-                  main = paste("Symmetric Potential"),
-                  display_numbers = FALSE,
-                  fontsize = 10)
-#silent = TRUE) 
-heatmap_sym_plots <- as.ggplot(p_sym$gtable) 
-
-# Save as .csv
-write.csv(V_asym, file = file.path(results_dir, paste0("V_asym.csv")))
-write.csv(V_sym,  file = file.path(results_dir, paste0("V_sym.csv")))
-
-# Prepare and export statistical potentials data frames for further analysis
-
-sym_df <- melt(V_sym)
-idx <- which(lower.tri(V_sym, diag = TRUE), arr.ind = TRUE)
-aa1 <- rownames(V_sym)[idx[,1]]
-aa2 <- colnames(V_sym)[idx[,2]]
-pair <- paste(pmin(aa1, aa2), pmax(aa1, aa2), sep = "-")
-val  <- V_sym[idx]
-sym_pairs <- data.frame(pair = pair, value = as.numeric(val), stringsAsFactors = FALSE)
-sym_pairs_sep <- sym_pairs %>%
-  separate(pair, into = c("aa1", "aa2"), sep = "-")
-
-write.csv(sym_pairs_sep, file = file.path(results_dir, paste0("V_sym_df.csv")))
-
-
-asym_df <- melt(V_asym) %>%
-  rename(
-    aa1 = Var1,
-    aa2 = Var2
-  )
-
-write.csv(asym_df, file = file.path(results_dir, paste0("V_asym_df.csv")))
-
-# Combine both heatmaps into a single plot
-(heatmap_asym_plots | heatmap_sym_plots)
-
-### Check cose di Leonardo nuovo dataset EM ###
-
-sym_df <- melt(V_sym)
-leonardo_V_sym <- read.csv("/Users/lorenzosisti/Downloads/df_symmetric_statistical_potentials_centroids_minimized.csv")
-
-# Filtra e tieni solo le colonne di interesse
-df_all <- leonardo_V_sym %>%
-  filter(part == "all") %>%
-  select(pair, potential)
-
-head(df_all)
-
-## 1) df_all: hai già fatto filter(part=="all") e select(pair, potential)
-##    Assicurati che 'pair' sia tipo "ALA-ARG" (ordine alfabetico con '-')
-
-## 2) Estrai le 210 coppie da V_sym
-stopifnot(is.matrix(V_sym), !is.null(rownames(V_sym)), !is.null(colnames(V_sym)))
-
-idx <- which(lower.tri(V_sym, diag = TRUE), arr.ind = TRUE)
-aa1 <- rownames(V_sym)[idx[,1]]
-aa2 <- colnames(V_sym)[idx[,2]]
-
-## Ordina alfabeticamente ogni coppia per avere una chiave canonica "AAA-BBB"
-pair <- paste(pmin(aa1, aa2), pmax(aa1, aa2), sep = "-")
-val  <- V_sym[idx]
-
-sym_pairs <- data.frame(pair = pair, value = as.numeric(val), stringsAsFactors = FALSE)
-
-sym_pairs_sep <- sym_pairs %>%
-  separate(pair, into = c("aa1", "aa2"), sep = "-")
-
-head(sym_pairs_sep)
-#write.csv(sym_pairs_sep, file = file.path(results_dir, paste0("V_sym_df.csv")))
-
-
-## 3) Unisci con il CSV filtrato
-joined <- merge(df_all, sym_pairs, by = "pair", all = FALSE)
-
-## 4) Correlazioni
-cor_pearson  <- cor(joined$potential, joined$value, method = "pearson",  use = "complete.obs")
-
-###
-
-asym_df <- melt(V_asym)
-
-#write.csv(asym_df, file = file.path(results_dir, paste0("V_asym_df.csv")))
-leonardo_V_asym <- read.csv("/Users/lorenzosisti/Downloads/df_asymmetric_statistical_potentials_centroids_minimized.csv")
-leonardo_V_asym$Var1 <- paste(leonardo_V_asym$resid_ab, "_Ab", sep = "")
-leonardo_V_asym$Var2 <- paste(leonardo_V_asym$resid_ag, "_Ag", sep = "")
-leonardo_V_asym <- leonardo_V_asym[leonardo_V_asym$part == "all",]
-
-
-# Assumendo che asym_df sia già creato con melt(V_asym)
-# E che leonardo_V_asym abbia già le colonne Var1 e Var2
-
-# Merge sui nomi delle coppie ordinate
-merged_df <- merge(asym_df, 
-                   leonardo_V_asym[, c("Var1", "Var2", "potential")],
-                   by = c("Var1", "Var2"))
-
-# Calcolo della correlazione di Pearson
-correlation <- cor(merged_df$value, merged_df$potential, method = "pearson")
-
-(heatmap_asym_plots | heatmap_sym_plots)
-
-
-
+### Heatmap per il potenziale simmetrico
+heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
+                                                    part_name = .x,
+                                                    symmetric = TRUE))
+names(heatmaps_sym) <- parts
