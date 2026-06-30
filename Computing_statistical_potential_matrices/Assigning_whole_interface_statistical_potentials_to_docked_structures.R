@@ -23,7 +23,7 @@ plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_12_06_50_pose"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose"
 
 #pdb_dir <- "/path/to/your/docked/structures/files/directory/"
 #results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
@@ -40,10 +40,24 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 # Retrieve all PDB files from the docking folder
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
-# Load precomputed statistical potential data frames
-asym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_12_06/V_asym_df.csv")
-sym_potentials_whole_int <- read.csv("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_12_06/V_sym_df.csv")
+# Load precomputed statistical potential data frames (long format, from script 3)
+df_asym_long <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_asym_potential.csv")
+df_sym_long  <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_sym_potential.csv")
 
+### --- ASIMMETRICO: ricostruisci aa1/aa2/value con i suffissi _Ab / _Ag ---
+asym_potentials_whole_int <- df_asym_long[part == "all", .(
+  aa1   = paste0(resid_ab, "_Ab"),
+  aa2   = paste0(resid_ag, "_Ag"),
+  value = potential
+)]
+
+### --- SIMMETRICO: filtra part == "all" e "specchia" le coppie non ordinate ---
+df_sym_all <- df_sym_long[part == "all"]
+
+sym_potentials_whole_int <- rbindlist(list(
+  df_sym_all[, .(aa1 = resid_i, aa2 = resid_j, value = potential)],
+  df_sym_all[resid_i != resid_j, .(aa1 = resid_j, aa2 = resid_i, value = potential)]
+))
 # Function that computes symmetric statistical potentials for a given PDB model
 assign_sym_pmf_to_docking <- function(pdb_path) {
   
@@ -257,8 +271,8 @@ summary_results <- future_map_dfr(
 
 # Save results in .csv
 write.csv(summary_results,
-          file = file.path(results_dir, "potenziali_per_modello_HDOCK.csv"),
+          file = file.path(results_dir, "potenziali_per_modello_AF3.csv"),
           row.names = FALSE)
 
 message("\n✅ Analysis completed!")
-message("➡️ Results saved to: ", file.path(results_dir, "pmf_for_docked_structures.csv"))
+message("➡️ Results saved to: ", file.path(results_dir, "potenziali_per_modello_AF3.csv"))
