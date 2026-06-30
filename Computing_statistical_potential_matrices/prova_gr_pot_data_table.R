@@ -309,7 +309,6 @@ build_potential_matrix <- function(df_potential, ring_name, symmetric = FALSE, a
   return(mat)
 }
 
-### Genera (e opzionalmente salva) l'heatmap per un singolo 'part'
 plot_potential_heatmap <- function(df_potential,
                                    ring_name,
                                    symmetric  = FALSE,
@@ -317,13 +316,18 @@ plot_potential_heatmap <- function(df_potential,
                                    title_prefix = "Radial Potential",
                                    save_dir   = results_dir,
                                    save       = TRUE,
-                                   width = 7, height = 6) {
+                                   width = 7, height = 6,
+                                   global_lim = NULL) {
   
   mat <- build_potential_matrix(df_potential, ring_name, symmetric = symmetric, aa_order = aa_order)
   
-  pot_min <- min(mat, na.rm = TRUE)
-  pot_max <- max(mat, na.rm = TRUE)
-  lim     <- max(abs(pot_min), abs(pot_max))
+  if (is.null(global_lim)) {
+    pot_min <- min(mat, na.rm = TRUE)
+    pot_max <- max(mat, na.rm = TRUE)
+    lim     <- max(abs(pot_min), abs(pot_max))
+  } else {
+    lim <- global_lim
+  }
   
   type_label <- if (symmetric) "Symmetric" else "Asymmetric"
   main_title <- paste(type_label, title_prefix, "-", toupper(ring_name))
@@ -351,13 +355,20 @@ plot_potential_heatmap <- function(df_potential,
 }
 
 
-### Heatmap per il potenziale asimmetrico
+# Shared limit across all 6 asymmetric ring pairs
+lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
+
+# Shared limit across all 6 symmetric ring pairs
+lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
+
 heatmaps_asym <- map(ring_pairs, ~ plot_potential_heatmap(df_potential_combined,
-                                                     ring_name = .x,
-                                                     symmetric = FALSE))
+                                                          ring_name = .x,
+                                                          symmetric = FALSE,
+                                                          global_lim = lim_asym))
 names(heatmaps_asym) <- ring_pairs
 
-### Heatmap per il potenziale simmetrico
-heatmaps_sym <- map(ring_pairs, ~ plot_potential_heatmap(df_sym_potential_combined, ring_name = .x, symmetric = TRUE))
+heatmaps_sym <- map(ring_pairs, ~ plot_potential_heatmap(df_sym_potential_combined,
+                                                         ring_name = .x,
+                                                         symmetric = TRUE,
+                                                         global_lim = lim_sym))
 names(heatmaps_sym) <- ring_pairs
-
