@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_gr_29_06_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_gr_30_06_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -279,3 +279,85 @@ df_sym_potential_combined <- rbindlist(sym_potentials_list)
 
 saveRDS(df_sym_potential_combined, file.path(results_dir, "ring_sym_potential.rds"))
 fwrite(df_sym_potential_combined, file.path(results_dir, "ring_sym_potential.csv"))
+
+### Costruisce la matrice 20x20 a partire dal data.table long
+build_potential_matrix <- function(df_potential, ring_name, symmetric = FALSE, aa_order = amino_acids) {
+  
+  dt <- df_potential[ring_pair == ring_name]
+  
+  if (!symmetric) {
+    # Caso asimmetrico: righe = resid_ab, colonne = resid_ag
+    mat_dt <- dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
+    rn  <- mat_dt$resid_ab
+    mat <- as.matrix(mat_dt[, -1, with = FALSE])
+    rownames(mat) <- rn
+  } else {
+    # Caso simmetrico: la tabella ha solo resid_i <= resid_j -> va "specchiata"
+    dt_full <- rbindlist(list(
+      dt[, .(resid_i, resid_j, potential)],
+      dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
+    ))
+    mat_dt <- dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
+    rn  <- mat_dt$resid_i
+    mat <- as.matrix(mat_dt[, -1, with = FALSE])
+    rownames(mat) <- rn
+  }
+  
+  # Riordina righe/colonne secondo la scala Kyte-Doolittle
+  mat <- mat[aa_order, aa_order]
+  
+  return(mat)
+}
+
+### Genera (e opzionalmente salva) l'heatmap per un singolo 'part'
+plot_potential_heatmap <- function(df_potential,
+                                   ring_name,
+                                   symmetric  = FALSE,
+                                   aa_order   = amino_acids,
+                                   title_prefix = "Radial Potential",
+                                   save_dir   = results_dir,
+                                   save       = TRUE,
+                                   width = 7, height = 6) {
+  
+  mat <- build_potential_matrix(df_potential, ring_name, symmetric = symmetric, aa_order = aa_order)
+  
+  pot_min <- min(mat, na.rm = TRUE)
+  pot_max <- max(mat, na.rm = TRUE)
+  lim     <- max(abs(pot_min), abs(pot_max))
+  
+  type_label <- if (symmetric) "Symmetric" else "Asymmetric"
+  main_title <- paste(type_label, title_prefix, "-", toupper(ring_name))
+  
+  p <- pheatmap(mat,
+                color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
+                breaks = seq(-lim, lim, length.out = 51),
+                cluster_rows = FALSE,
+                cluster_cols = FALSE,
+                main = main_title,
+                display_numbers = FALSE,
+                fontsize = 10,
+                silent = TRUE)
+  
+  gg_heatmap <- as.ggplot(p$gtable)
+  
+  if (save) {
+    file_suffix <- if (symmetric) "sym" else "asym"
+    file_name   <- paste0("heatmap_", file_suffix, "_", ring_name, ".png")
+    ggsave(filename = file.path(save_dir, file_name),
+           plot = gg_heatmap, width = width, height = height, dpi = 300, bg = "white")
+  }
+  
+  return(gg_heatmap)
+}
+
+
+### Heatmap per il potenziale asimmetrico
+heatmaps_asym <- map(ring_pairs, ~ plot_potential_heatmap(df_potential_combined,
+                                                     ring_name = .x,
+                                                     symmetric = FALSE))
+names(heatmaps_asym) <- ring_pairs
+
+### Heatmap per il potenziale simmetrico
+heatmaps_sym <- map(ring_pairs, ~ plot_potential_heatmap(df_sym_potential_combined, ring_name = .x, symmetric = TRUE))
+names(heatmaps_sym) <- ring_pairs
+
