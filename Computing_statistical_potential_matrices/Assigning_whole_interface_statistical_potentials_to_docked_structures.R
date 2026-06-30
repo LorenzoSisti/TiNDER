@@ -271,8 +271,8 @@ summary_results <- future_map_dfr(
 
 # Save results in .csv
 write.csv(summary_results,
-          file = file.path(results_dir, "potenziali_per_modello_AF3.csv"),
+          file = file.path(results_dir, "potenziali_whole_per_posa.csv"),
           row.names = FALSE)
 
 message("\n✅ Analysis completed!")
-message("➡️ Results saved to: ", file.path(results_dir, "potenziali_per_modello_AF3.csv"))
+message("➡️ Results saved to: ", file.path(results_dir, "potenziali_whole_per_posa.rds"))
