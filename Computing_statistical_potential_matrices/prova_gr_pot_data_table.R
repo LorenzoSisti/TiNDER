@@ -106,7 +106,7 @@ gen_df_contacts <- function(pdb_path) {
     setnames(dt_contacts, "ring", "ring_ag")
     
     # Scarta eventuali contatti con ring fuori range (non dovrebbe succedere, ma per sicurezza)
-    dt_contacts <- dt_contacts[ring_ab %in% 1:Nsteps & ring_ag %in% 1:Nsteps]
+    # dt_contacts <- dt_contacts[ring_ab %in% 1:Nsteps & ring_ag %in% 1:Nsteps]
     
     # Etichetta non ordinata della coppia di ring: (1,2) e (2,1) -> "1-2"
     dt_contacts[, `:=`(
@@ -279,5 +279,3 @@ df_sym_potential_combined <- rbindlist(sym_potentials_list)
 
 saveRDS(df_sym_potential_combined, file.path(results_dir, "ring_sym_potential.rds"))
 fwrite(df_sym_potential_combined, file.path(results_dir, "ring_sym_potential.csv"))
-
-
