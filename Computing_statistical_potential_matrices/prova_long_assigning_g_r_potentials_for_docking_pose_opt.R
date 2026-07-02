@@ -35,8 +35,8 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose"
+pdb_dir <- "/Users/lorenzosisti/Downloads/models"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
@@ -65,6 +65,8 @@ setkey(df_sym_long_full, lookup_key)
 
 # Retrieve all PDB files from the docking folder
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# pdb_path <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/9o58_H_L_A_9.pdb"
 
 ### ----------------------------------------------------------------------- ###
 ### FUNZIONE SIMMETRICA

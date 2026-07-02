@@ -12,6 +12,7 @@ library(dplyr)
 library(tidyr)
 library(future)
 library(furrr)
+library(data.table)
 
 # Define the path to a custom function files
 #source("/path/to/your/custom/functions/files/functions.R")
@@ -22,8 +23,8 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose"
+pdb_dir <- "/Users/lorenzosisti/Downloads/models"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
 
 #pdb_dir <- "/path/to/your/docked/structures/files/directory/"
 #results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
@@ -58,6 +59,9 @@ sym_potentials_whole_int <- rbindlist(list(
   df_sym_all[, .(aa1 = resid_i, aa2 = resid_j, value = potential)],
   df_sym_all[resid_i != resid_j, .(aa1 = resid_j, aa2 = resid_i, value = potential)]
 ))
+
+#pdb_path <- "/Users/lorenzosisti/Downloads/models/2ltq_F_E_D_9.pdb"
+
 # Function that computes symmetric statistical potentials for a given PDB model
 assign_sym_pmf_to_docking <- function(pdb_path) {
   
@@ -98,7 +102,7 @@ assign_sym_pmf_to_docking <- function(pdb_path) {
     condHL <- centroidi_df$chain %in% chain_HL # Antibody residues
     
     # Subset the distance matrix to contain only antigen–antibody distances
-    Inter_DistMat <- DistMat[condA, condHL]
+    Inter_DistMat <- DistMat[condA, condHL] # rows = antigen; columns = antibody
     Inter_DistMat_Bin <- ifelse(Inter_DistMat <= DistCutoff, 1, 0)
     
     BS_A <- apply(Inter_DistMat_Bin, 1, sum)
@@ -113,8 +117,8 @@ assign_sym_pmf_to_docking <- function(pdb_path) {
     # Extract contact residue pairs
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
     contacts <- data.frame(
-      res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]],
-      res2 = colnames(Inter_DistMat_Bin)[contact_indices[, 2]]
+      res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]], # antigen res
+      res2 = colnames(Inter_DistMat_Bin)[contact_indices[, 2]] # antibody res
     )
     
     # Skip if no contacts found
@@ -196,8 +200,8 @@ assign_asym_pmf_to_docking <- function(pdb_path) {
     
     contact_indices <- which(Inter_DistMat_Bin == 1, arr.ind = TRUE)
     contacts <- data.frame(
-      res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]],
-      res2 = colnames(Inter_DistMat_Bin)[contact_indices[, 2]]
+      res1 = rownames(Inter_DistMat_Bin)[contact_indices[, 1]], # antigen res
+      res2 = colnames(Inter_DistMat_Bin)[contact_indices[, 2]] # antibody res
     )
     
     if (nrow(contacts) == 0) {
@@ -211,10 +215,10 @@ assign_asym_pmf_to_docking <- function(pdb_path) {
         aa1 = paste0(
           sub("_.*", "", res2), "_",
           ifelse(sub(".*_", "", res2) %in% chain_HL, "Ab", "Ag")
-        ),
+        ), # aa1 is the Ab residue
         aa2 = paste0(
           sub("_.*", "", res1), "_",
-          ifelse(sub(".*_", "", res1) %in% chain_HL, "Ab", "Ag")
+          ifelse(sub(".*_", "", res1) %in% chain_HL, "Ab", "Ag") # aa2 is the Ag residue
         )
       ) %>%
       group_by(aa1, aa2) %>%

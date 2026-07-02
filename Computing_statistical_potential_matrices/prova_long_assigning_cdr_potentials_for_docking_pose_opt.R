@@ -16,8 +16,8 @@ handlers(global = TRUE)
 handlers("rstudio")
 
 ### 3. PARAMETRI GLOBALI E DIRECTORY
-pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose"
+pdb_dir <- "/Users/lorenzosisti/Downloads/models"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
