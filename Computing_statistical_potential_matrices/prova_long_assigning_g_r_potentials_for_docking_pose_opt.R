@@ -300,8 +300,8 @@ summary_results <- future_map_dfr(
 )
 
 # Salva in CSV
-write.csv(summary_results, file = file.path(results_dir, "summary_results_AF3_stratificati.csv"),
+write.csv(summary_results, file = file.path(results_dir, "potenziali_gr_per_posa.csv"),
           row.names = FALSE)
 
 # Facoltativo: anche in RDS
-saveRDS(summary_results, file = file.path(results_dir, "summary_results_AF3_stratificati.rds"))
+saveRDS(summary_results, file = file.path(results_dir, "potenziali_gr_per_posa.rds"))
