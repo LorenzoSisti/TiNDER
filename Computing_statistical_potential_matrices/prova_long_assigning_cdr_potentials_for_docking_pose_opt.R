@@ -7,8 +7,8 @@
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr, data.table, stringr)
 
 # Caricamento funzioni custom
-# source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
-source("/path/to/your/custom/functions/files/functions.R") 
+source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+#source("/path/to/your/custom/functions/files/functions.R") 
 
 ### 2. CONFIGURAZIONE PARALLELIZZAZIONE
 plan(multisession, workers = parallel::detectCores() - 1)
@@ -50,6 +50,8 @@ sym_potentials_cdr <- rbindlist(list(
   df_sym_cdr[resid_i != resid_j, .(part, aa1 = resid_j, aa2 = resid_i, value = potential)]
 ))
 
+#pdb_path <- "/Users/lorenzosisti/Downloads/models/2ltq_F_E_D_9.pdb"
+
 # ==============================================================================
 # FUNZIONE CORE: CALCOLO POTENZIALI PER CDR
 # ==============================================================================
@@ -75,7 +77,7 @@ score_docking_pose_cdr <- function(pdb_path) {
     dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid)]
     
     # 4. Mappatura CDR tramite fcase() sui residui dell'anticorpo
-    dt_ab <- dt_centroids[chain %in% chain_HL]
+    dt_ab <- dt_centroids[chain %in% chain_HL] # seleziono solo le catene anticorpali
     dt_ab[, cdr := fcase(
       chain == chain_H & resno %in% 26:32, "h1",
       chain == chain_H & resno %in% 52:56, "h2",
@@ -84,7 +86,7 @@ score_docking_pose_cdr <- function(pdb_path) {
       chain == chain_L & resno %in% 50:56, "l2",
       chain == chain_L & resno %in% 89:97, "l3",
       default = NA_character_
-    )]
+    )] # seleziono solo i CDR
     
     # Teniamo SOLO i residui dell'anticorpo che fanno parte di una CDR
     dt_ab_cdr <- dt_ab[!is.na(cdr)]

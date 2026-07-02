@@ -132,8 +132,8 @@ assign_sym_gr_pmf_to_docking <- function(pdb_path) {
   # --- Calcolo potenziale simmetrico (nessuna distinzione di direzione necessaria) ---
   contacts <- contacts %>%
     mutate(
-      aa1 = sub("_.*", "", res1),
-      aa2 = sub("_.*", "", res2),
+      aa1 = sub("_.*", "", res1), # antigen residue
+      aa2 = sub("_.*", "", res2), #antibody residue
       ring_i = pmin(ring_res1, ring_res2),
       ring_j = pmax(ring_res1, ring_res2),
       ring_pair = paste(ring_i, ring_j, sep = "-"),
@@ -220,13 +220,10 @@ assign_asym_gr_pmf_to_docking <- function(pdb_path) {
   contacts$ring_res1 <- findInterval(vet_dist_centroid[contacts$res1], borders, left.open = TRUE)
   contacts$ring_res2 <- findInterval(vet_dist_centroid[contacts$res2], borders, left.open = TRUE)
   
-  # --- Determina dinamicamente la chain di res1 e res2, invece di assumerla per posizione ---
-  # (corregge il bug per cui res1, sempre antigene per costruzione di Inter_DistMat,
-  #  veniva etichettato "_Ab" e res2, sempre anticorpo, veniva etichettato "_Ag")
   contacts <- contacts %>%
     mutate(
-      aa_res1 = sub("_.*", "", res1),
-      aa_res2 = sub("_.*", "", res2),
+      aa_res1 = sub("_.*", "", res1), # antigen residue
+      aa_res2 = sub("_.*", "", res2), # antibody residue
       chain_res1 = sub(".*_", "", res1),
       chain_res2 = sub(".*_", "", res2),
       
