@@ -20,6 +20,22 @@ renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log") {
     return(list(ok = FALSE, error = "df_coord empty"))
   }
   
+  ## --- NEW: tag CDR region using the ORIGINAL (pre-renumbering) resno ---
+  assign_region <- function(chain, resno) {
+    region <- rep("fw", length(resno))            # "fw" = framework / non-CDR
+    is_h <- chain == "H"
+    is_l <- chain == "L"
+    region[is_h & resno %in% 26:32]  <- "h1"
+    region[is_h & resno %in% 52:56]  <- "h2"
+    region[is_h & resno %in% 95:102] <- "h3"
+    region[is_l & resno %in% 24:34]  <- "l1"
+    region[is_l & resno %in% 50:56]  <- "l2"
+    region[is_l & resno %in% 89:97]  <- "l3"
+    region
+  }
+  df_coord$region <- assign_region(df_coord$chain, df_coord$resno)
+  ## ------------------------------------------------------------------
+  
   # Create a copy of the coordinates to reassign residue numbers per chain
   # This step resolves issues due to non-standard residue numbering in antibodies, e.g. insertions like SER100, LYS100A, THR100B, ASN101...
   df_coord_renumbered <- df_coord
@@ -31,7 +47,7 @@ renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log") {
                                   df_coord_renumbered$insert[df_coord_renumbered$chain == chain], sep=""))
     nuova_numerazione <- setNames(seq_along(residui_unici), residui_unici)
     df_coord_renumbered$resno[df_coord_renumbered$chain == chain] <- nuova_numerazione[paste(df_coord_renumbered$resno[df_coord_renumbered$chain == chain], 
-                                                                                           df_coord_renumbered$insert[df_coord_renumbered$chain == chain], sep="")]
+                                                                                             df_coord_renumbered$insert[df_coord_renumbered$chain == chain], sep="")]
     corrected_dfs[[chain]] <- df_coord_renumbered[df_coord_renumbered$chain == chain, ]
   }
   
