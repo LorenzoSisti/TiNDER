@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03/07_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -51,7 +51,7 @@ gen_df_contacts <- function(pdb_path) {
       return(list(ok = FALSE, filename = file_name, path = pdb_path, error = renumbered_df$error))
     }
     dt_coord <- as.data.table(renumbered_df$df_coord_renumbered)
-    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid)]
+    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid, region)]
     dt_ab <- dt_centroids[chain %in% c("H", "L")]
     dt_ag <- dt_centroids[!chain %in% c("H", "L")]
     
@@ -73,6 +73,7 @@ gen_df_contacts <- function(pdb_path) {
         resid_ab = resid,
         resno_ab = resno,
         chain_ab = chain,
+        region_ab = region,
         resid_ag = i.resid,
         resno_ag = i.resno,
         chain_ag = i.chain
@@ -148,26 +149,12 @@ get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
     _[, pair := paste(resid_ab, resid_ag, sep = "-")]
   
-  df_contacts <- df_contacts |>
-    _[(resid_ab %in% aa) & (resid_ag %in% aa)] |>
-    _[, c("pdb_id", "ch_h", "ch_l", "ch_ag") := tstrsplit(pdb_id, "_")]
+  df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
   
   if (part == 'all') {
     df_contacts <- df_contacts
-  } else if (part == 'l1') {
-    df_contacts <- df_contacts[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
-  } else if (part == 'l2') {
-    df_contacts <- df_contacts[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
-  } else if (part == 'l3') {
-    df_contacts <- df_contacts[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
-  } else if (part == 'h1') {
-    df_contacts <- df_contacts[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
-  } else if (part == 'h2') {
-    df_contacts <- df_contacts[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
-  } else if (part == 'h3') {
-    df_contacts <- df_contacts[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
   } else {
-    stop("Invalid value for 'part'. Use one of: 'l1', 'l2', 'l3', 'h1', 'h2', 'h3', or 'all'.")
+    df_contacts <- df_contacts[region_ab == part]
   }
   
   df_fxy <- df_contacts[, .(count = .N), by = .(resid_ag, resid_ab)][, freq := count / sum(count)]
@@ -204,26 +191,12 @@ get_symmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
     _[resid_i <= resid_j] |>
     _[, pair := paste(resid_i, resid_j, sep = "-")]
   
-  df_contacts <- df_contacts |>
-    _[(resid_ab %in% aa) & (resid_ag %in% aa)] |>
-    _[, c("pdb_id", "ch_h", "ch_l", "ch_ag") := tstrsplit(pdb_id, "_")]
+  df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
   
   if (part == 'all') {
     df_contacts <- df_contacts
-  } else if (part == 'l1') {
-    df_contacts <- df_contacts[(resno_ab %in% c(24:34)) & (chain_ab == ch_l)]
-  } else if (part == 'l2') {
-    df_contacts <- df_contacts[(resno_ab %in% c(50:56)) & (chain_ab == ch_l)]
-  } else if (part == 'l3') {
-    df_contacts <- df_contacts[(resno_ab %in% c(89:97)) & (chain_ab == ch_l)]
-  } else if (part == 'h1') {
-    df_contacts <- df_contacts[(resno_ab %in% c(26:32)) & (chain_ab == ch_h)]
-  } else if (part == 'h2') {
-    df_contacts <- df_contacts[(resno_ab %in% c(52:56)) & (chain_ab == ch_h)]
-  } else if (part == 'h3') {
-    df_contacts <- df_contacts[(resno_ab %in% c(95:102)) & (chain_ab == ch_h)]
   } else {
-    stop("Invalid value for 'part'. Use one of: 'l1', 'l2', 'l3', 'h1', 'h2', 'h3', or 'all'.")
+    df_contacts <- df_contacts[region_ab == part]
   }
   
   # Etichetta non ordinata per ogni contatto: resid_i <= resid_j alfabeticamente
