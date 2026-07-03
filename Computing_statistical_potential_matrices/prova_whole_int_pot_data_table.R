@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03/07_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03_07_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -278,7 +278,7 @@ build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, a
   
   if (!symmetric) {
     # Caso asimmetrico: righe = resid_ab, colonne = resid_ag
-    mat_dt <- dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
+    mat_dt <- data.table::dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
     rn  <- mat_dt$resid_ab
     mat <- as.matrix(mat_dt[, -1, with = FALSE])
     rownames(mat) <- rn
@@ -288,7 +288,7 @@ build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, a
       dt[, .(resid_i, resid_j, potential)],
       dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
     ))
-    mat_dt <- dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
+    mat_dt <- data.table::dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
     rn  <- mat_dt$resid_i
     mat <- as.matrix(mat_dt[, -1, with = FALSE])
     rownames(mat) <- rn
