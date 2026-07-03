@@ -2,3 +2,4 @@
 *.Rhistory
 .Rproj.user
 *.csv
+.ipynb_checkpoints
