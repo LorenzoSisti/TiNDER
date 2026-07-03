@@ -17,6 +17,7 @@ handlers("rstudio")
 
 ### 3. PARAMETRI GLOBALI E DIRECTORY
 pdb_dir <- "/Users/lorenzosisti/Downloads/models"
+#pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
 results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
 dir.create(results_dir, showWarnings = FALSE)
 
@@ -30,8 +31,8 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
 ### 4. PREPARAZIONE MATRICI DEI POTENZIALI (SOLO CDR)
-df_asym_long <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_asym_potential.csv")
-df_sym_long  <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_sym_potential.csv")
+df_asym_long <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03_07_data_table_sippl/whole_int_asym_potential.csv")
+df_sym_long  <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03_07_data_table_sippl/whole_int_sym_potential.csv")
 
 cdr_parts <- c("h1", "h2", "h3", "l1", "l2", "l3")
 

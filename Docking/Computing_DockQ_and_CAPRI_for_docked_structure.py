@@ -119,8 +119,8 @@ def rmsd_biopython(model_path, native_path):
 # MAIN LOOP — RUN DOCKQ COMPARISONS FOR EACH MODEL
 ############################################################
 
-native_dir = "/path/to/native/structures"
-model_dir = "/path/to/docked/structures"
+native_dir = "/Users/lorenzosisti/Downloads/database_settembre_renamed_copy"
+model_dir = "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/"
 
 out_file = "DockQ_results.csv"
 
