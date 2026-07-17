@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_gr_30_06_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -330,7 +330,8 @@ plot_potential_heatmap <- function(df_potential,
   }
   
   type_label <- if (symmetric) "Symmetric" else "Asymmetric"
-  main_title <- paste(type_label, title_prefix, "-", toupper(ring_name))
+  main_title <- paste0(type_label, " ", title_prefix, " - ", toupper(ring_name),
+                       "\n(rows = Antibody, cols = Antigen)")
   
   p <- pheatmap(mat,
                 color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
