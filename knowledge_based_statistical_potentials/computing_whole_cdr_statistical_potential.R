@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_03_07_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -301,6 +301,8 @@ build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, a
 }
 
 ### Genera (e opzionalmente salva) l'heatmap per un singolo 'part'
+### Allineata al primo script: limite colore condivisibile (global_lim) + etichette Ab/Ag
+### esplicite sul caso asimmetrico. Salvataggio SOLO in PNG.
 plot_potential_heatmap <- function(df_potential,
                                    part_name,
                                    symmetric  = FALSE,
@@ -308,16 +310,31 @@ plot_potential_heatmap <- function(df_potential,
                                    title_prefix = "Whole-Interface Potential",
                                    save_dir   = results_dir,
                                    save       = TRUE,
-                                   width = 7, height = 6) {
+                                   width = 7, height = 6,
+                                   global_lim = NULL) {
   
   mat <- build_potential_matrix(df_potential, part_name, symmetric = symmetric, aa_order = aa_order)
   
-  pot_min <- min(mat, na.rm = TRUE)
-  pot_max <- max(mat, na.rm = TRUE)
-  lim     <- max(abs(pot_min), abs(pot_max))
+  if (is.null(global_lim)) {
+    pot_min <- min(mat, na.rm = TRUE)
+    pot_max <- max(mat, na.rm = TRUE)
+    lim     <- max(abs(pot_min), abs(pot_max))
+  } else {
+    lim <- global_lim
+  }
   
   type_label <- if (symmetric) "Symmetric" else "Asymmetric"
   main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
+  
+  if (!symmetric) {
+    # Caso asimmetrico: righe = anticorpo, colonne = antigene -> etichette esplicite
+    row_labels <- paste0(rownames(mat), " (Ab)")
+    col_labels <- paste0(colnames(mat), " (Ag)")
+    main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
+  } else {
+    row_labels <- rownames(mat)
+    col_labels <- colnames(mat)
+  }
   
   p <- pheatmap(mat,
                 color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
@@ -325,6 +342,8 @@ plot_potential_heatmap <- function(df_potential,
                 cluster_rows = FALSE,
                 cluster_cols = FALSE,
                 main = main_title,
+                labels_row = row_labels,
+                labels_col = col_labels,
                 display_numbers = FALSE,
                 fontsize = 10,
                 silent = TRUE)
@@ -341,15 +360,22 @@ plot_potential_heatmap <- function(df_potential,
   return(gg_heatmap)
 }
 
+# Limite di colore condiviso tra tutte le "parti" (asimmetriche e simmetriche separatamente),
+# cosi' le heatmap sono confrontabili tra loro, come nel primo script (ring-based)
+lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
+lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
 
-### Heatmap per il potenziale asimmetrico
+### Heatmap per il potenziale asimmetrico (PNG, salvate in results_dir)
 heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
                                                      part_name = .x,
-                                                     symmetric = FALSE))
+                                                     symmetric = FALSE,
+                                                     global_lim = lim_asym))
 names(heatmaps_asym) <- parts
 
-### Heatmap per il potenziale simmetrico
+### Heatmap per il potenziale simmetrico (PNG, salvate in results_dir)
 heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
                                                     part_name = .x,
-                                                    symmetric = TRUE))
+                                                    symmetric = TRUE,
+                                                    global_lim = lim_sym))
 names(heatmaps_sym) <- parts
+
