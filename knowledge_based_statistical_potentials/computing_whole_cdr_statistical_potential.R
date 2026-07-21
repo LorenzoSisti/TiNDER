@@ -379,3 +379,50 @@ heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
                                                     global_lim = lim_sym))
 names(heatmaps_sym) <- parts
 
+### Compute perason correlation between statistical potential matrices
+
+sym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_sym_potential.csv")
+
+# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
+sym_matrices[, pair_key := paste(resid_i, resid_j, sep = "-")]
+
+# Reshape: righe = pair_key, colonne = part, valori = potential
+wide_dt <- dcast(sym_matrices, pair_key ~ part, value.var = "potential")
+
+# Matrice numerica (esclude pair_key)
+mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
+rownames(mat_for_cor) <- wide_dt$pair_key
+
+# Correlazione di Pearson a coppie tra tutte le parti
+cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+pheatmap(cor_matrix,
+                   display_numbers = TRUE,
+                   cluster_rows = FALSE,
+                   cluster_cols = FALSE,
+                   main = "Pearson correlation between symmetric region potentials")
+
+asym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_asym_potential.csv")
+
+# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
+sym_matrices[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
+
+# Reshape: righe = pair_key, colonne = part, valori = potential
+wide_dt <- dcast(sym_matrices, pair_key ~ part, value.var = "potential")
+
+# Matrice numerica (esclude pair_key)
+mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
+rownames(mat_for_cor) <- wide_dt$pair_key
+
+# Correlazione di Pearson a coppie tra tutte le parti
+cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+pheatmap(cor_matrix,
+         display_numbers = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Pearson correlation between asymmetric region potentials")

@@ -373,3 +373,73 @@ heatmaps_sym <- map(ring_pairs, ~ plot_potential_heatmap(df_sym_potential_combin
                                                          symmetric = TRUE,
                                                          global_lim = lim_sym))
 names(heatmaps_sym) <- ring_pairs
+
+### Compute perason correlation between statistical potential matrices
+
+sym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/ring_sym_potential.csv")
+sym_matrices_all <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_sym_potential.csv")
+
+all_part <- copy(sym_matrices_all[part == "all"])
+setnames(all_part, "part", "ring_pair")
+
+# Unisci al dataframe con i ring pair
+sym_matrices_combined <- rbindlist(list(sym_matrices, all_part), use.names = TRUE)
+
+# Controllo
+unique(sym_matrices_combined$ring_pair)
+
+# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
+sym_matrices_combined[, pair_key := paste(resid_i, resid_j, sep = "-")]
+
+# Reshape: righe = pair_key, colonne = part, valori = potential
+wide_dt <- dcast(sym_matrices_combined, pair_key ~ ring_pair, value.var = "potential")
+
+# Matrice numerica (esclude pair_key)
+mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
+rownames(mat_for_cor) <- wide_dt$pair_key
+
+# Correlazione di Pearson a coppie tra tutte le parti
+cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+pheatmap(cor_matrix,
+         display_numbers = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Pearson correlation between symmetric gr potentials")
+
+asym_matrices <-  fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/ring_asym_potential.csv")
+asym_matrices_all <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_asym_potential.csv")
+
+all_part <- copy(asym_matrices_all[part == "all"])
+setnames(all_part, "part", "ring_pair")
+
+# Unisci al dataframe con i ring pair
+asym_matrices_combined <- rbindlist(list(asym_matrices, all_part), use.names = TRUE)
+
+# Controllo
+unique(asym_matrices_combined$ring_pair)
+
+# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
+asym_matrices_combined[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
+# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
+asym_matrices_combined[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
+
+# Reshape: righe = pair_key, colonne = part, valori = potential
+wide_dt <- dcast(asym_matrices_combined, pair_key ~ ring_pair, value.var = "potential")
+
+# Matrice numerica (esclude pair_key)
+mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
+rownames(mat_for_cor) <- wide_dt$pair_key
+
+# Correlazione di Pearson a coppie tra tutte le parti
+cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
+
+print(cor_matrix)
+
+pheatmap(cor_matrix,
+         display_numbers = TRUE,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Pearson correlation between asymmetric gr potentials")
