@@ -8,7 +8,7 @@ library(tidyr)
 
 # --- 2. IMPOSTAZIONI GLOBALI ---
 # !!! MODIFICA QUESTO PATH !!!
-output_dir <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK_near_vs_all"
+output_dir <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK_near_vs_all_09_08"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 plot_width <- 8
 plot_height <- 6
@@ -16,15 +16,15 @@ plot_dpi <- 300
 theme_custom <- theme_minimal() +
   theme(plot.title = element_blank())
 
-path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_results_AF3_12_06.csv"
-path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_whole_per_posa.csv"
-path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_gr_per_posa.csv"
-path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/punteggi_cdr_per_posa.csv"
+#path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_results_AF3_12_06.csv"
+#path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_whole_per_posa.csv"
+#path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_gr_per_posa.csv"
+#path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/punteggi_cdr_per_posa.csv"
 
-#path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_HDOCK.csv"
-#path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_whole_per_posa.csv"
-#path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_gr_per_posa.csv"
-#path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/punteggi_cdr_per_posa.csv"
+path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_HDOCK.csv"
+path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_whole_per_posa.csv"
+path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_gr_per_posa.csv"
+path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/punteggi_cdr_per_posa.csv"
 
 dockq_scores <- read.csv(path_dockq_af3)
 whole_potential_scores <- read.csv(path_pot_af3_whole)
@@ -94,7 +94,7 @@ p_roc_combined <- ggroc(roc_list, legacy.axes = TRUE, linewidth = 1) +
 print(p_roc_combined)
 
 ggsave(
-  filename = file.path(output_dir, "AF3_ROC_combined_6curve_mean.png"),
+  filename = file.path(output_dir, "HDOCK_ROC_combined_6curve_mean.png"),
   plot = p_roc_combined,
   width = plot_width,
   height = plot_height,
