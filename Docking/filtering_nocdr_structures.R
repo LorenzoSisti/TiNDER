@@ -97,3 +97,55 @@ df_contacts <- rbindlist(
 saveRDS(df_contacts,      file.path(results_dir, "df_contacts.rds"))
 fwrite(df_contacts,       file.path(results_dir, "df_contacts.csv"))
 
+# Let's now implement a function with the following logic:
+# Given a set of CDRs amino acids, if there is any contact in unique poses that falls outside of the set,
+# That will be a trivially identifiable pose without any intelligent algorithm
+# I already have that information in my df_contacts
+
+### Filtra le pose "buone": nessun contatto in framework (fw)
+unique_poses_id <- unique(df_contacts$pdb_id)
+good_poses <- character(0)
+
+for (i in seq_along(unique_poses_id)) {
+  
+  current_id <- unique_poses_id[i]
+  
+  # Sottoinsieme dei contatti relativi a questa posa
+  pose_contacts <- df_contacts[pdb_id == current_id]
+  
+  # Se anche un solo contatto è su "fw", scarta la posa
+  has_fw_contact <- any(pose_contacts$region_ab == "fw")
+  
+  if (!has_fw_contact) {
+    good_poses <- c(good_poses, current_id)
+  }
+}
+
+cat("Pose totali:", length(unique_poses_id), "\n")
+cat("Pose buone (solo contatti CDR):", length(good_poses), "\n")
+
+# Se vuoi anche il dataframe filtrato, non solo la lista di ID:
+df_contacts_good <- df_contacts[pdb_id %in% good_poses]
+
+saveRDS(good_poses, file.path(results_dir, "good_poses.rds"))
+fwrite(df_contacts_good, file.path(results_dir, "df_contacts_good_poses.csv"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
