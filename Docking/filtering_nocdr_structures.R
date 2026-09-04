@@ -151,7 +151,7 @@ p <- ggplot(df_pct_fw, aes(x = pct_fw)) +
 fw_threshold <- 25  # percentuale massima di contatti fw ammessa
 
 ### Pose buone: percentuale di fw sotto la soglia
-good_poses <- df_pct_fw[pct_fw < fw_threshold, pdb_id] #71 pose buone
+good_poses <- df_pct_fw[pct_fw < fw_threshold, pdb_id] #71 pose buone (78 NN secondo DockQ PDF quindi forse ci siamo anche)
 
 cat("Pose totali:", nrow(df_pct_fw), "\n")
 cat("Pose buone (%fw <", fw_threshold, "):", length(good_poses), "\n")
@@ -162,17 +162,48 @@ df_contacts_good <- df_contacts[pdb_id %in% good_poses]
 saveRDS(good_poses,       file.path(results_dir, "good_poses.rds"))
 fwrite(df_contacts_good,  file.path(results_dir, "df_contacts_good_poses.csv"))
 
+### Estrai il nome file originale dal pdb_id, rimuovendo il suffisso _H_L_<antigene>
+df_pct_fw[, Model := paste0(sub("_H_L_[A-Za-z0-9]+$", "", pdb_id), ".pdb")]
 
+path_dockq_af3 <- "/Users/lorenzosisti/Downloads/DockQ_results_AF3_12_06.csv"
+dockq_df <- fread(path_dockq_af3)
 
+### Join: una riga per posa, con % fw e relativo DockQ
+df_merged <- merge(
+  df_pct_fw,
+  dockq_df[, .(Model, DockQ, iRMSD, LRMSD, fnat)],
+  by = "Model",
+  all.x = TRUE
+)
 
+### Controlla quante pose non hanno trovato match (utile per debug)
+cat("Pose senza match nel DockQ csv:", sum(is.na(df_merged$DockQ)), "\n")
 
+### Correlazione Pearson e Spearman
+cor_pearson  <- cor.test(df_merged$pct_fw, df_merged$DockQ, method = "pearson")
+cor_spearman <- cor.test(df_merged$pct_fw, df_merged$DockQ, method = "spearman")
 
+print(cor_pearson)
+print(cor_spearman)
 
+p_corr <- ggplot(df_merged, aes(x = pct_fw, y = DockQ)) +
+  geom_point(alpha = 0.5, color = "steelblue") +
+  geom_smooth(method = "lm", color = "firebrick", se = TRUE) +
+  geom_hline(yintercept = 0.81, linetype = "dashed", color = "darkgreen") +
+  geom_hline(yintercept = 0.24, linetype = "dashed", color = "orange") +
+  labs(
+    title = "Relazione tra % contatti framework (fw) e DockQ",
+    subtitle = sprintf("Pearson r = %.3f (p = %.3g) | Spearman rho = %.3f (p = %.3g)",
+                       cor_pearson$estimate, cor_pearson$p.value,
+                       cor_spearman$estimate, cor_spearman$p.value),
+    x = "% contatti fw sul totale",
+    y = "DockQ score"
+  ) +
+  theme_minimal(base_size = 13)
 
-
-
-
-
-
-
+ggsave(
+  filename = file.path(results_dir, "correlation_fw_dockq.pdf"),
+  plot = p_corr,
+  width = 8, height = 6
+)
 
