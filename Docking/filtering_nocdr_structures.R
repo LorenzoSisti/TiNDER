@@ -131,9 +131,36 @@ saveRDS(good_poses, file.path(results_dir, "good_poses.rds"))
 fwrite(df_contacts_good, file.path(results_dir, "df_contacts_good_poses.csv"))
 
 
+### Calcola la percentuale di contatti "fw" per ciascuna posa
+df_pct_fw <- df_contacts[, .(
+  n_total = .N,
+  n_fw    = sum(region_ab == "fw")
+), by = pdb_id][, pct_fw := 100 * n_fw / n_total]
 
+### Istogramma della percentuale di fw sul totale dei contatti, per posa
+p <- ggplot(df_pct_fw, aes(x = pct_fw)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "white", boundary = 0) +
+  labs(
+    title = "Distribuzione della percentuale di contatti framework (fw) per posa",
+    x = "% contatti fw sul totale dei contatti",
+    y = "Numero di pose"
+  ) +
+  theme_minimal(base_size = 13)
 
+### Soglia di accettazione
+fw_threshold <- 25  # percentuale massima di contatti fw ammessa
 
+### Pose buone: percentuale di fw sotto la soglia
+good_poses <- df_pct_fw[pct_fw < fw_threshold, pdb_id] #71 pose buone
+
+cat("Pose totali:", nrow(df_pct_fw), "\n")
+cat("Pose buone (%fw <", fw_threshold, "):", length(good_poses), "\n")
+
+### Dataframe filtrato con solo le pose buone
+df_contacts_good <- df_contacts[pdb_id %in% good_poses]
+
+saveRDS(good_poses,       file.path(results_dir, "good_poses.rds"))
+fwrite(df_contacts_good,  file.path(results_dir, "df_contacts_good_poses.csv"))
 
 
 
