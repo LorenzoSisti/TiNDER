@@ -121,6 +121,8 @@ for (i in seq_along(unique_poses_id)) {
   }
 }
 
+#all_fw_poses <- df_contacts[, .(all_fw = all(region_ab == "fw")), by = pdb_id][all_fw == TRUE, pdb_id]
+
 cat("Pose totali:", length(unique_poses_id), "\n")
 cat("Pose buone (solo contatti CDR):", length(good_poses), "\n")
 
