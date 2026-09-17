@@ -441,3 +441,169 @@ quantile(dockq_scores$fnat, probs = seq(0, 1, 0.1), na.rm = TRUE)
 decoy_fnat_alto <- dockq_scores[dockq_scores$DockQ <= 0.24 & dockq_scores$fnat > 0.25, ]
 nrow(decoy_fnat_alto)
 head(decoy_fnat_alto)
+
+
+# =========================================================================
+#  APPENDICE B — Test di DeLong appaiati, su soglia di %fw
+#  B1: Sym vs Asym (stesso potenziale, stesso metodo)
+#  B2: Asym — CDR vs Whole e Stratified vs Whole (stesso metodo)
+#  Richiede A2/A3 (calcola_pct_fw, prepara_dati_esteso) gia' definite.
+# =========================================================================
+
+# --- B0. Funzione di supporto: DeLong appaiato ad una soglia -------------
+delong_a_soglia <- function(df, filtro_col, soglia, score_A, score_B,
+                            dir_A, dir_B, verso = "less") {
+  
+  tieni <- !is.na(df[[filtro_col]]) &
+             (if (verso == "greater") df[[filtro_col]] > soglia else df[[filtro_col]] < soglia)
+  sub   <- df[tieni & !is.na(df[[score_A]]) & !is.na(df[[score_B]]) & !is.na(df$true_class), ]
+  
+  n_pos <- sum(sub$true_class == 1, na.rm = TRUE)
+  n_neg <- sum(sub$true_class == 0, na.rm = TRUE)
+  
+  if (n_pos < min_per_classe || n_neg < min_per_classe) {
+    return(data.frame(soglia = soglia, n_tot = nrow(sub), n_pos = n_pos, n_neg = n_neg,
+                      auc_A = NA_real_, auc_B = NA_real_,
+                      diff_auc = NA_real_, p_value = NA_real_))
+  }
+  
+  r_A <- roc(sub$true_class, sub[[score_A]], direction = dir_A, quiet = TRUE)
+  r_B <- roc(sub$true_class, sub[[score_B]], direction = dir_B, quiet = TRUE)
+  
+  # tryCatch: se roc.test fallisce (es. varianza degenere con AUC=1 su entrambe
+  # le curve), non blocchiamo il ciclo ma registriamo NA e continuiamo
+  test_result <- tryCatch({
+    t <- suppressWarnings(roc.test(r_A, r_B, method = "delong", paired = TRUE))
+    t$p.value
+  }, error = function(e) {
+    message("  DeLong non calcolabile a soglia ", soglia,
+            " (n_pos=", n_pos, ", n_neg=", n_neg, "): ", conditionMessage(e))
+    NA_real_
+  })
+  
+  data.frame(soglia = soglia, n_tot = nrow(sub), n_pos = n_pos, n_neg = n_neg,
+             auc_A = as.numeric(auc(r_A)), auc_B = as.numeric(auc(r_B)),
+             diff_auc = as.numeric(auc(r_A)) - as.numeric(auc(r_B)),
+             p_value = test_result)
+}
+
+# griglia di soglie sulla %fw, coerente con quella gia' usata in A1
+soglie_pct_fw <- metriche$pct_fw$soglie
+
+# --- B1. SYM vs ASYM, su soglia %fw, per ogni metodo e potenziale -------
+
+risultati_sym_vs_asym <- list()
+
+for (metodo in names(datasets)) {
+  
+  cfg <- datasets[[metodo]]
+  if (!file.exists(cfg$dockq) || !file.exists(path_contacts[[metodo]])) next
+  
+  for (nome_pot in names(cfg$potenziali)) {
+    
+    pot <- cfg$potenziali[[nome_pot]]
+    if (!file.exists(pot$path)) next
+    
+    df <- prepara_dati_esteso(cfg$dockq, pot$path, pot$join_col, path_contacts[[metodo]])
+    
+    dir_sym  <- stima_direzione(df, "mean_sym")
+    dir_asym <- stima_direzione(df, "mean_asym")
+    
+    res <- bind_rows(lapply(soglie_pct_fw, function(s) {
+      delong_a_soglia(df, "pct_fw", s, "mean_asym", "mean_sym",
+                      dir_asym, dir_sym, verso = "less")
+      # A = Asym, B = Sym -> diff_auc > 0 significa Asym migliore di Sym
+    })) %>%
+      mutate(metodo = metodo, potenziale = nome_pot, confronto = "Asym vs Sym")
+    
+    risultati_sym_vs_asym[[paste(metodo, nome_pot, sep = "_")]] <- res
+  }
+}
+
+risultati_sym_vs_asym_df <- bind_rows(risultati_sym_vs_asym) %>%
+  group_by(metodo, potenziale) %>%
+  mutate(p_value_BH = p.adjust(p_value, method = "BH")) %>%
+  ungroup()
+
+write.csv(risultati_sym_vs_asym_df,
+          file.path(output_dir, "DeLong_AsymVsSym_pctfw.csv"), row.names = FALSE)
+
+p_sym_asym <- ggplot(risultati_sym_vs_asym_df,
+                     aes(x = soglia, y = diff_auc, color = p_value_BH < 0.05)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(size = 1.8) +
+  geom_line(aes(group = 1), color = "grey70", linewidth = 0.4) +
+  facet_grid(metodo ~ potenziale) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+                     name = "Significativo\n(BH < 0.05)") +
+  labs(x = "Soglia di %fw (pose con %fw < soglia)", y = "AUC(Asym) - AUC(Sym)") +
+  theme_custom
+
+print(p_sym_asym)
+ggsave(file.path(output_dir, "DeLong_AsymVsSym_pctfw.png"), p_sym_asym,
+       width = plot_width + 3, height = plot_height, dpi = plot_dpi)
+
+# --- B2. Solo ASYM: CDR vs Whole e Stratified vs Whole, su soglia %fw ---
+
+risultati_confronto_potenziali <- list()
+
+for (metodo in names(datasets)) {
+  
+  cfg <- datasets[[metodo]]
+  if (!file.exists(cfg$dockq) || !file.exists(path_contacts[[metodo]])) next
+  
+  pot_whole <- cfg$potenziali[["Whole"]]
+  if (is.null(pot_whole) || !file.exists(pot_whole$path)) next
+  df_whole <- prepara_dati_esteso(cfg$dockq, pot_whole$path, pot_whole$join_col, path_contacts[[metodo]])
+  
+  for (nome_pot in c("CDR", "Stratified")) {
+    
+    pot <- cfg$potenziali[[nome_pot]]
+    if (is.null(pot) || !file.exists(pot$path)) next
+    
+    df_alt <- prepara_dati_esteso(cfg$dockq, pot$path, pot$join_col, path_contacts[[metodo]])
+    
+    # allinea sulle stesse pose; %fw viene da entrambi i df (stesso df_contacts,
+    # quindi identico), lo teniamo da df_whole come riferimento unico
+    df_join <- inner_join(
+      df_whole %>% select(Model, pct_fw, true_class, mean_asym_whole = mean_asym),
+      df_alt   %>% select(Model, mean_asym_alt = mean_asym),
+      by = "Model"
+    )
+    
+    dir_whole <- stima_direzione(df_whole, "mean_asym")
+    dir_alt   <- stima_direzione(df_alt,   "mean_asym")
+    
+    res <- bind_rows(lapply(soglie_pct_fw, function(s) {
+      delong_a_soglia(df_join, "pct_fw", s, "mean_asym_alt", "mean_asym_whole",
+                      dir_alt, dir_whole, verso = "less")
+      # A = potenziale alternativo (CDR/Stratified), B = Whole
+    })) %>%
+      mutate(metodo = metodo, confronto = paste0(nome_pot, " vs Whole (Asym)"))
+    
+    risultati_confronto_potenziali[[paste(metodo, nome_pot, sep = "_")]] <- res
+  }
+}
+
+risultati_confronto_potenziali_df <- bind_rows(risultati_confronto_potenziali) %>%
+  group_by(metodo, confronto) %>%
+  mutate(p_value_BH = p.adjust(p_value, method = "BH")) %>%
+  ungroup()
+
+write.csv(risultati_confronto_potenziali_df,
+          file.path(output_dir, "DeLong_CDRvsWhole_StratVsWhole_Asym_pctfw.csv"), row.names = FALSE)
+
+p_confronto_pot <- ggplot(risultati_confronto_potenziali_df,
+                          aes(x = soglia, y = diff_auc, color = p_value_BH < 0.05)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  geom_point(size = 1.8) +
+  geom_line(aes(group = 1), color = "grey70", linewidth = 0.4) +
+  facet_grid(metodo ~ confronto) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+                     name = "Significativo\n(BH < 0.05)") +
+  labs(x = "Soglia di %fw (pose con %fw < soglia)", y = "AUC(alternativa) - AUC(Whole)") +
+  theme_custom
+
+print(p_confronto_pot)
+ggsave(file.path(output_dir, "DeLong_CDRvsWhole_StratVsWhole_Asym_pctfw.png"), p_confronto_pot,
+       width = plot_width + 3, height = plot_height, dpi = plot_dpi)
