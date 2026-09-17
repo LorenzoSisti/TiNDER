@@ -345,7 +345,7 @@ plot_auc_vs_metrica <- function(risultati, x_label, etichetta) {
     theme(legend.position = "right")
   
   p_n <- ggplot(risultati, aes(x = soglia)) +
-    geom_line(aes(y = n_pos, linetype = "Decoy (DockQ <= 0.81)"), linewidth = 0.7) +
+    geom_line(aes(y = n_pos, linetype = "Decoy (DockQ <= 0.24)"), linewidth = 0.7) +
     geom_line(aes(y = n_neg, linetype = "Non decoy"),             linewidth = 0.7) +
     labs(x = paste0(x_label, "  —  ", etichetta), y = "N pose", linetype = NULL) +
     theme_custom +
