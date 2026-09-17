@@ -15,8 +15,10 @@ plan(multisession, workers = parallel::detectCores() - 1)
 handlers(global = TRUE)
 handlers("rstudio")
 
-pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/"
-results_dir <- "/Users/lorenzosisti/Downloads/cdrs_filtered_docked_structure/"
+#pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/"
+#results_dir <- "/Users/lorenzosisti/Downloads/cdrs_filtered_docked_structure/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/models"
+results_dir <- "/Users/lorenzosisti/Downloads/hdock_cdrs_filtered_docked_structure/"
 dir.create(results_dir, showWarnings = FALSE)
 
 all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)

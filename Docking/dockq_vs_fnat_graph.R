@@ -235,7 +235,7 @@ metriche <- list(
 # NB: per HDOCK va rieseguito quello script puntando alla directory HDOCK.
 path_contacts <- list(
   AF3   = "/Users/lorenzosisti/Downloads/cdrs_filtered_docked_structure/df_contacts.csv",
-  HDOCK = "/Users/lorenzosisti/Downloads/cdrs_filtered_docked_structure_hdock/df_contacts.csv"
+  HDOCK = "/Users/lorenzosisti/Downloads/hdock_cdrs_filtered_docked_structure/df_contacts.csv"
 )
 
 # --- A2. DA df_contacts A UNA TABELLA %fw PER POSA ------------------------
@@ -345,7 +345,7 @@ plot_auc_vs_metrica <- function(risultati, x_label, etichetta) {
     theme(legend.position = "right")
   
   p_n <- ggplot(risultati, aes(x = soglia)) +
-    geom_line(aes(y = n_pos, linetype = "Decoy (DockQ <= 0.24)"), linewidth = 0.7) +
+    geom_line(aes(y = n_pos, linetype = "Decoy (DockQ <= 0.81)"), linewidth = 0.7) +
     geom_line(aes(y = n_neg, linetype = "Non decoy"),             linewidth = 0.7) +
     labs(x = paste0(x_label, "  —  ", etichetta), y = "N pose", linetype = NULL) +
     theme_custom +
