@@ -8,7 +8,7 @@ library(tidyr)
 
 # --- 2. IMPOSTAZIONI GLOBALI ---
 # !!! MODIFICA QUESTO PATH !!!
-output_dir <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK_decoy_vs_all_09_08"
+output_dir <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK_decoy_vs_all_17_09"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 plot_width <- 8
 plot_height <- 6
@@ -30,6 +30,28 @@ dockq_scores <- read.csv(path_dockq_af3)
 whole_potential_scores <- read.csv(path_pot_af3_whole)
 stratified_potential_scores <- read.csv(path_pot_af3_strat)
 cdr_potentials_scores <- read.csv(path_pot_af3_cdr)
+
+# --- ISTOGRAMMA DI fnat ---
+
+p_fnat <- ggplot(dockq_scores, aes(x = fnat)) +
+  geom_histogram(
+    binwidth = 0.05,
+    boundary = 0,          # allinea i bin a 0, 0.05, 0.10, ...
+    closed   = "left",
+    fill     = "steelblue",
+    color    = "white"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 1, by = 0.1),
+    limits = c(-0.025, 1.025)
+  ) +
+  labs(
+    x = "fnat (frazione di contatti nativi)",
+    y = "Numero di modelli"
+  ) +
+  theme_custom
+
+print(p_fnat)
 
 # --- 3. CALCOLO DELLE 6 ROC (ogni oggetto ha ora un nome distinto) ---
 
