@@ -8,7 +8,7 @@ library(tidyr)
 
 # --- 2. IMPOSTAZIONI GLOBALI ---
 # !!! MODIFICA QUESTO PATH !!!
-output_dir <- "/Users/lorenzosisti/Downloads/DockQ_HDOCK_decoy_vs_all_17_09"
+output_dir <- "/Users/lorenzosisti/TiNDER/data/roc_auc"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 plot_width <- 8
 plot_height <- 6
@@ -16,15 +16,10 @@ plot_dpi <- 300
 theme_custom <- theme_minimal() +
   theme(plot.title = element_blank())
 
-path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_results_AF3_12_06.csv"
-path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_whole_per_posa.csv"
-path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_gr_per_posa.csv"
-path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/punteggi_cdr_per_posa.csv"
-
-#path_dockq_af3 = "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_HDOCK.csv"
-#path_pot_af3_whole = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_whole_per_posa.csv"
-#path_pot_af3_strat = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_gr_per_posa.csv"
-#path_pot_af3_cdr = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/punteggi_cdr_per_posa.csv"
+path_dockq_af3 = "/Users/lorenzosisti/TiNDER/data/dockq_af3.csv"
+path_pot_af3_whole = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/whole_interface_score.csv"
+path_pot_af3_strat = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/layer_score.csv"
+path_pot_af3_cdr = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/cdr_score.csv"
 
 dockq_scores <- read.csv(path_dockq_af3)
 whole_potential_scores <- read.csv(path_pot_af3_whole)

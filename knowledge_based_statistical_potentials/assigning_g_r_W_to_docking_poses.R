@@ -20,6 +20,8 @@
 #    di essere assunta per posizione.
 ################################################################################
 
+#TODO: CHECK OUTPUT, YOU CAN ELIMINAE TWO COLUMNS
+
 ### Required libraries
 library(bio3d)
 library(dplyr)
@@ -35,8 +37,8 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/models"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
+pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5
@@ -47,8 +49,8 @@ amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
                  "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 
 ### --- Load precomputed long-format potential tables (from the ring-contacts script) ---
-df_asym_long <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_30_06_data_table_sippl/ring_asym_potential.csv")
-df_sym_long  <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_30_06_data_table_sippl/ring_sym_potential.csv")
+df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_asym_potential.csv")
+df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_sym_potential.csv")
 
 # Lookup asimmetrico: chiave diretta resid_ab_resid_ag_ringpair
 df_asym_long[, lookup_key := paste(resid_ab, resid_ag, ring_pair, sep = "_")]
@@ -300,8 +302,5 @@ summary_results <- future_map_dfr(
 )
 
 # Salva in CSV
-write.csv(summary_results, file = file.path(results_dir, "potenziali_gr_per_posa.csv"),
+write.csv(summary_results, file = file.path(results_dir, "layer_score.csv"),
           row.names = FALSE)
-
-# Facoltativo: anche in RDS
-saveRDS(summary_results, file = file.path(results_dir, "potenziali_gr_per_posa.rds"))

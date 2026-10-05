@@ -23,8 +23,8 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/models"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock"
+pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/"
 
 #pdb_dir <- "/path/to/your/docked/structures/files/directory/"
 #results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"
@@ -42,8 +42,8 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
 # Load precomputed statistical potential data frames (long format, from script 3)
-df_asym_long <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_asym_potential.csv")
-df_sym_long  <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_29_06_data_table_sippl/whole_int_sym_potential.csv")
+df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
+df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
 
 ### --- ASIMMETRICO: ricostruisci aa1/aa2/value con i suffissi _Ab / _Ag ---
 asym_potentials_whole_int <- df_asym_long[part == "all", .(
@@ -275,8 +275,8 @@ summary_results <- future_map_dfr(
 
 # Save results in .csv
 write.csv(summary_results,
-          file = file.path(results_dir, "potenziali_whole_per_posa.csv"),
+          file = file.path(results_dir, "whole_interface_score.csv"),
           row.names = FALSE)
 
 message("\n✅ Analysis completed!")
-message("➡️ Results saved to: ", file.path(results_dir, "potenziali_whole_per_posa.rds"))
+message("➡️ Results saved to: ", file.path(results_dir, "whole_interface_score.csv"))

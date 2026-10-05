@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -90,7 +90,7 @@ gen_df_contacts <- function(pdb_path) {
     dt_if_all[, dist_centroid := sqrt((x - center_BS$x)^2 + (y - center_BS$y)^2 + (z - center_BS$z)^2)]
     
     r_max   <- max(dt_if_all$dist_centroid)
-    borders <- c(0, 0.37, 0.64, 1) * r_max
+    borders <- c(0, 0.33, 0.66, 1) * r_max
     
     dt_if_all[, ring := findInterval(dist_centroid, borders, left.open = TRUE)]
     
@@ -376,8 +376,8 @@ names(heatmaps_sym) <- ring_pairs
 
 ### Compute perason correlation between statistical potential matrices
 
-sym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/ring_sym_potential.csv")
-sym_matrices_all <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_sym_potential.csv")
+sym_matrices <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_sym_potential.csv")
+sym_matrices_all <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
 
 all_part <- copy(sym_matrices_all[part == "all"])
 setnames(all_part, "part", "ring_pair")
@@ -409,8 +409,8 @@ pheatmap(cor_matrix,
          cluster_cols = FALSE,
          main = "Pearson correlation between symmetric gr potentials")
 
-asym_matrices <-  fread("/Users/lorenzosisti/Downloads/potenziali_statistici_gr_17_07_data_table_sippl/ring_asym_potential.csv")
-asym_matrices_all <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_asym_potential.csv")
+asym_matrices <-  fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_asym_potential.csv")
+asym_matrices_all <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
 
 all_part <- copy(asym_matrices_all[part == "all"])
 setnames(all_part, "part", "ring_pair")

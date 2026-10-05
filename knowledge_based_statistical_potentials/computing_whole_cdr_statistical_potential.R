@@ -12,7 +12,7 @@
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2)
 
-# Define the path to a custom function files
+# Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
 #source("/path/to/your/custom/functions/files/functions.R")
 source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 
@@ -23,7 +23,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
@@ -38,9 +38,10 @@ set.seed(1234)
 
 all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
-# pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" 
+# pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" # Just for single-path testing 
 
-### Main processing function
+### Generate a contacts dataframe 
+### N.B. This function relies on the renumber_ab_chains() function (see functions.R)
 gen_df_contacts <- function(pdb_path) {
   aa <- aa.table$aa3[1:20]
   file_name <- basename(pdb_path)
@@ -55,7 +56,7 @@ gen_df_contacts <- function(pdb_path) {
     dt_ab <- dt_centroids[chain %in% c("H", "L")]
     dt_ag <- dt_centroids[!chain %in% c("H", "L")]
     
-    # Costruisci pdb_id nel formato atteso da get_asymmetric_potential
+    # Build pdb_id
     ch_h  <- dt_ab[chain == "H", unique(chain)]
     ch_l  <- dt_ab[chain == "L", unique(chain)]
     ch_ag <- dt_ag[, unique(chain)]
@@ -84,17 +85,17 @@ gen_df_contacts <- function(pdb_path) {
   })
 }
 
-### Esegui in parallelo
+### Launch in parallel
 with_progress({
   results_list <- future_map(
     all_pdbs,
-    gen_df_contacts,   # <- nome corretto della funzione
+    gen_df_contacts,   
     .options = furrr_options(seed = TRUE),
     .progress = TRUE
   )
 })
 
-### Filtra risultati validi
+### Filter valid results
 valid_results <- keep(results_list, ~ .x$ok)
 failed_files  <- map_chr(discard(results_list, ~ .x$ok), "filename")
 cat("File falliti:", length(failed_files), "\n")
@@ -102,13 +103,13 @@ if (length(failed_files) > 0) {
   writeLines(failed_files, file.path(results_dir, "failed_files.txt"))
 }
 
-### Combina tutti i contatti
+### Combine results
 df_contacts <- rbindlist(
   map(valid_results, "contacts"),
   use.names = TRUE
 )
 
-### Conteggi residui all'interfaccia
+### Compute residue counts at the interface
 residue_counts_ab <- df_contacts[, .(resid_ab, resno_ab, chain_ab, pdb_id)] |>
   unique() |>
   _[, .N, by = resid_ab]
@@ -117,7 +118,6 @@ residue_counts_ag <- df_contacts[, .(resid_ag, resno_ag, chain_ag, pdb_id)] |>
   unique() |>
   _[, .N, by = resid_ag]
 
-### Salvataggio
 saveRDS(df_contacts,      file.path(results_dir, "df_contacts.rds"))
 saveRDS(residue_counts_ab, file.path(results_dir, "residue_counts_ab.rds"))
 saveRDS(residue_counts_ag, file.path(results_dir, "residue_counts_ag.rds"))
@@ -141,6 +141,7 @@ fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
 # L1: 24:34
 # L2: 50:56
 # L3: 89:97
+
 get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   df_contacts <- copy(df_contacts)
   aa <- aa.table$aa3[1:20]
@@ -186,7 +187,7 @@ get_symmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
   aa <- aa.table$aa3[1:20]
   kBT <- 2.479
   
-  # Tutte le 210 coppie non ordinate (i <= j alfabeticamente, evita duplicati ARG-LYS / LYS-ARG)
+  # All the 210 non ordered aminop acids pairs (avoid ARG-LYS / LYS-ARG duplicates)
   all_pairs <- CJ(resid_i = aa, resid_j = aa) |>
     _[resid_i <= resid_j] |>
     _[, pair := paste(resid_i, resid_j, sep = "-")]
@@ -247,43 +248,34 @@ parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
 potentials_list <- map(parts, ~ get_asymmetric_potential(df_contacts, part = .x))
 names(potentials_list) <- parts
 
-# Unisci tutto in un'unica tabella lunga, già con la colonna `part` per distinguerle
+# Merge in a unique long dataframe, withe the `part` column to distinguish it
 df_potential_combined <- rbindlist(potentials_list)
-
-df_potential_combined
-
 saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.rds"))
-
-fwrite(df_potential_combined,       file.path(results_dir, "whole_int_asym_potential.csv"))
+fwrite(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.csv"))
 
 ### SYM ###
 
 sym_potentials_list <- map(parts, ~ get_symmetric_potential(df_contacts, part = .x))
 names(sym_potentials_list) <- parts
 
-# Unisci tutto in un'unica tabella lunga, già con la colonna `part` per distinguerle
 df_sym_potential_combined <- rbindlist(sym_potentials_list)
-
-df_sym_potential_combined
-
 saveRDS(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.rds"))
+fwrite(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.csv"))
 
-fwrite(df_sym_potential_combined,       file.path(results_dir, "whole_int_sym_potential.csv"))
 
-
-### Costruisce la matrice 20x20 a partire dal data.table long
+### Build the 20x20 matrix from the data.table long
 build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, aa_order = amino_acids) {
   
   dt <- df_potential[part == part_name]
   
   if (!symmetric) {
-    # Caso asimmetrico: righe = resid_ab, colonne = resid_ag
+    # Asymmetric potential: rows = resid_ab, columns = resid_ag
     mat_dt <- data.table::dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
     rn  <- mat_dt$resid_ab
     mat <- as.matrix(mat_dt[, -1, with = FALSE])
     rownames(mat) <- rn
   } else {
-    # Caso simmetrico: la tabella ha solo resid_i <= resid_j -> va "specchiata"
+    # Symmetric potential
     dt_full <- rbindlist(list(
       dt[, .(resid_i, resid_j, potential)],
       dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
@@ -294,15 +286,12 @@ build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, a
     rownames(mat) <- rn
   }
   
-  # Riordina righe/colonne secondo la scala Kyte-Doolittle
+  # Order amino acids according to Kyte-Doolittle scale
   mat <- mat[aa_order, aa_order]
-  
   return(mat)
 }
 
-### Genera (e opzionalmente salva) l'heatmap per un singolo 'part'
-### Allineata al primo script: limite colore condivisibile (global_lim) + etichette Ab/Ag
-### esplicite sul caso asimmetrico. Salvataggio SOLO in PNG.
+### Generate and save the matrices .png
 plot_potential_heatmap <- function(df_potential,
                                    part_name,
                                    symmetric  = FALSE,
@@ -327,7 +316,7 @@ plot_potential_heatmap <- function(df_potential,
   main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
   
   if (!symmetric) {
-    # Caso asimmetrico: righe = anticorpo, colonne = antigene -> etichette esplicite
+    # Asymmetric case: Make an explicit flag (antigen residue vs antibody residue)
     row_labels <- paste0(rownames(mat), " (Ab)")
     col_labels <- paste0(colnames(mat), " (Ag)")
     main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
@@ -360,19 +349,16 @@ plot_potential_heatmap <- function(df_potential,
   return(gg_heatmap)
 }
 
-# Limite di colore condiviso tra tutte le "parti" (asimmetriche e simmetriche separatamente),
-# cosi' le heatmap sono confrontabili tra loro, come nel primo script (ring-based)
+# Color limit shared among matrices, for better visual comparisons
 lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
 lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
 
-### Heatmap per il potenziale asimmetrico (PNG, salvate in results_dir)
 heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
                                                      part_name = .x,
                                                      symmetric = FALSE,
                                                      global_lim = lim_asym))
 names(heatmaps_asym) <- parts
 
-### Heatmap per il potenziale simmetrico (PNG, salvate in results_dir)
 heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
                                                     part_name = .x,
                                                     symmetric = TRUE,
@@ -381,7 +367,7 @@ names(heatmaps_sym) <- parts
 
 ### Compute perason correlation between statistical potential matrices
 
-sym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_sym_potential.csv")
+sym_matrices <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
 
 # Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
 sym_matrices[, pair_key := paste(resid_i, resid_j, sep = "-")]
@@ -404,23 +390,17 @@ pheatmap(cor_matrix,
                    cluster_cols = FALSE,
                    main = "Pearson correlation between symmetric region potentials")
 
-asym_matrices <- fread("/Users/lorenzosisti/Downloads/potenziali_statistici_whole_17_07_data_table_sippl/whole_int_asym_potential.csv")
+asym_matrices <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
 
-# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
 sym_matrices[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
 
-# Reshape: righe = pair_key, colonne = part, valori = potential
+# Reshape: righe = pair_key, colonne = part, values = potential
 wide_dt <- dcast(sym_matrices, pair_key ~ part, value.var = "potential")
-
-# Matrice numerica (esclude pair_key)
 mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
 rownames(mat_for_cor) <- wide_dt$pair_key
 
-# Correlazione di Pearson a coppie tra tutte le parti
+# Compute pairwise Pearson correlation coefficient
 cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
-
-print(cor_matrix)
-
 pheatmap(cor_matrix,
          display_numbers = TRUE,
          cluster_rows = FALSE,
