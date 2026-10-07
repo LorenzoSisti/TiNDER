@@ -12,11 +12,11 @@ library(pROC)
 # Define the path to a custom function files
 source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 
-output_dir <- "/Users/lorenzosisti/Downloads/AUC_vs_fnat_17_09_024"
+output_dir <- "/Users/lorenzosisti/TiNDER/data/roc_thd_vs_fw_ratio"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
-plot_width  <- 9
-plot_height <- 7
+plot_width  <- 8
+plot_height <- 6
 plot_dpi    <- 300
 theme_custom <- theme_minimal() + theme(plot.title = element_blank())
 
@@ -30,19 +30,11 @@ min_per_classe <- 1                    # n minimo di decoy e non-decoy per calco
 
 datasets <- list(
   AF3 = list(
-    dockq = "/Users/lorenzosisti/Downloads/DockQ_results_AF3_12_06.csv",
+    dockq = "/Users/lorenzosisti/TiNDER/data/dockq_af3.csv",
     potenziali = list(
-      Whole      = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_whole_per_posa.csv",  join_col = "pdb"),
-      Stratified = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/potenziali_gr_per_posa.csv",     join_col = "pdb"),
-      CDR        = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_50_pose/punteggi_cdr_per_posa.csv",      join_col = "pdb_filename")
-    )
-  ),
-  HDOCK = list(
-    dockq = "/Users/lorenzosisti/Downloads/DockQ_HDOCK/DockQ_results_HDOCK.csv",
-    potenziali = list(
-      Whole      = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_whole_per_posa.csv", join_col = "pdb"),
-      Stratified = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/potenziali_gr_per_posa.csv",    join_col = "pdb"),
-      CDR        = list(path = "/Users/lorenzosisti/Downloads/potenziali_statistici_30_06_hdock/punteggi_cdr_per_posa.csv",     join_col = "pdb_filename")
+      Whole      = list(path = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/whole_interface_score.csv",  join_col = "pdb"),
+      Stratified = list(path = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/layer_score.csv",     join_col = "pdb"),
+      CDR        = list(path = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/cdr_score.csv",      join_col = "pdb_filename")
     )
   )
 )
@@ -534,7 +526,7 @@ p_sym_asym <- ggplot(risultati_sym_vs_asym_df,
   geom_point(size = 1.8) +
   geom_line(aes(group = 1), color = "grey70", linewidth = 0.4) +
   facet_grid(metodo ~ potenziale) +
-  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "deeppink"),
                      name = "Significativo\n(BH < 0.05)") +
   labs(x = "Soglia di %fw (pose con %fw < soglia)", y = "AUC(Asym) - AUC(Sym)") +
   theme_custom
@@ -599,7 +591,7 @@ p_confronto_pot <- ggplot(risultati_confronto_potenziali_df,
   geom_point(size = 1.8) +
   geom_line(aes(group = 1), color = "grey70", linewidth = 0.4) +
   facet_grid(metodo ~ confronto) +
-  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "firebrick"),
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "deeppink"),
                      name = "Significativo\n(BH < 0.05)") +
   labs(x = "Soglia di %fw (pose con %fw < soglia)", y = "AUC(alternativa) - AUC(Whole)") +
   theme_custom
