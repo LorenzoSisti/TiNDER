@@ -1,26 +1,34 @@
 ### RENUMBERING FUNCTION ###
 
-# Richiede: bio3d
-# Input:  pdb_aus  -> oggetto ritornato da read.pdb()
-#         pdb_path -> percorso del file (solo per logging/messaggi)
+# Requires: bio3d
+# Input:  pdb_aus  -> object obtained from read.pdb()
+#         pdb_path 
 # Output: list(ok=TRUE, df_coord_renumbered=...)  oppure ok=FALSE + error
 
-renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log") {
+renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log",
+                               representation = "sc_centroid") {
   
-  # To speed up contact calculations, we use a coarse-grained representation:
-  # we retain only the centroids of side chains for each residue.
-  # This excludes backbone atoms (N, CA, C, O) for all amino acids,
-  # except glycine, where we keep the CA atom (since its side chain is just a hydrogen).
-  df_coord <- pdb_aus$atom[pdb_aus$atom$type != "HETATM" & (
-    (pdb_aus$atom$resid != "GLY" & !(pdb_aus$atom$elety %in% c("N", "CA", "C", "O"))) |
-      (pdb_aus$atom$resid == "GLY" & pdb_aus$atom$elety == "CA")),]
+  atoms <- pdb_aus$atom[pdb_aus$atom$type != "HETATM", ]
+  
+  df_coord <- switch(representation,
+                     # Side-chain centroids (GLY: CA only)
+                     sc_centroid = atoms[(atoms$resid != "GLY" & !(atoms$elety %in% c("N", "CA", "C", "O"))) |
+                                           (atoms$resid == "GLY" & atoms$elety == "CA"), ],
+                     # C-alpha only, all amino acids
+                     ca          = atoms[atoms$elety == "CA", ],
+                     # All heavy atoms (backbone + side-chain): drop hydrogens and alternate locations
+                     all_atom    = atoms[!(atoms$elesy %in% "H" | grepl("^[0-9]?H", atoms$elety)) &
+                                           (is.na(atoms$alt) | atoms$alt == "A"), ],
+                     stop("Unknown representation: ", representation)
+  )
   
   if (nrow(df_coord) == 0) {
     writeLines(paste("File whose df_coord is empty:", pdb_path), log_file, append = TRUE)
     return(list(ok = FALSE, error = "df_coord empty"))
   }
   
-  ## --- NEW: tag CDR region using the ORIGINAL (pre-renumbering) resno ---
+  ## Tag CDR region using the ORIGINAL (pre-renumbering) resno for CDR potentials computation
+  ## DISCLAIMER: This is based upon the Chothia numbering scheme
   assign_region <- function(chain, resno) {
     region <- rep("fw", length(resno))            # "fw" = framework / non-CDR
     is_h <- chain == "H"
@@ -34,8 +42,7 @@ renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log") {
     region
   }
   df_coord$region <- assign_region(df_coord$chain, df_coord$resno)
-  ## ------------------------------------------------------------------
-  
+
   # Create a copy of the coordinates to reassign residue numbers per chain
   # This step resolves issues due to non-standard residue numbering in antibodies, e.g. insertions like SER100, LYS100A, THR100B, ASN101...
   df_coord_renumbered <- df_coord
@@ -54,6 +61,31 @@ renumber_ab_chains <- function(pdb_aus, pdb_path, log_file = "errors.log") {
   df_coord_renumbered <- do.call(rbind, corrected_dfs) # Merge corrected data from all chains into a single dataframe
   
   return(list(ok = TRUE, df_coord_renumbered = df_coord_renumbered))
+}
+
+### Residue-level contacts from point coordinates
+### (points = centroids, CA or single atoms depending on the representation).
+### Two residues are in contact if ANY pair of their points is <= cutoff.
+### Output: ONE row per residue pair, however many point pairs are in contact.
+
+gen_unique_residue_contacts <- function(dt_ab, dt_ag, cutoff) {
+  
+  dt_ab[, .dummy := 1L]
+  dt_ag[, .dummy := 1L]
+  
+  dt_ab[dt_ag, on = ".dummy", allow.cartesian = TRUE] |>
+    _[, dist2 := (x - i.x)^2 + (y - i.y)^2 + (z - i.z)^2] |>
+    _[dist2 <= cutoff^2] |>
+    _[, .(
+      resid_ab  = resid,
+      resno_ab  = resno,
+      chain_ab  = chain,
+      region_ab = region,
+      resid_ag  = i.resid,
+      resno_ag  = i.resno,
+      chain_ag  = i.chain
+    )] |>
+    unique()   # one entry per residue pair
 }
 
 ### COMPUTING AVERAGE HYDROPATHY COMPLEMENTARITY ###

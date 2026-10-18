@@ -23,12 +23,20 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/"
+#results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/"
+base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/"
 dir.create(results_dir, showWarnings = FALSE)
 
 # Distance cutoff (Å) to define contact between side-chains centroids
 DistCutoff <- 8.5  
 S <- 0.02
+
+### Parameters per representation
+REPR_PARAMS <- list(
+  sc_centroid = list(cutoff = 8.5),
+  ca          = list(cutoff = 12.0),   
+  all_atom    = list(cutoff = 6.0)
+)
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
@@ -42,19 +50,29 @@ all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names 
 
 ### Generate a contacts dataframe 
 ### N.B. This function relies on the renumber_ab_chains() function (see functions.R)
-gen_df_contacts <- function(pdb_path) {
+gen_df_contacts <- function(pdb_path, representation = "sc_centroid") {
   aa <- aa.table$aa3[1:20]
+  cutoff <- REPR_PARAMS[[representation]]$cutoff
   file_name <- basename(pdb_path)
   tryCatch({
     pdb_aus <- read.pdb(pdb_path)
-    renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path, log_file = "errors.log")
+    renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path, log_file = "errors.log",
+                                        representation = representation)
     if (!renumbered_df$ok) {
       return(list(ok = FALSE, filename = file_name, path = pdb_path, error = renumbered_df$error))
     }
     dt_coord <- as.data.table(renumbered_df$df_coord_renumbered)
-    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid, region)]
-    dt_ab <- dt_centroids[chain %in% c("H", "L")]
-    dt_ag <- dt_centroids[!chain %in% c("H", "L")]
+    
+    if (representation == "all_atom") {
+      # One point per ATOM (no centroids)
+      dt_points <- dt_coord[, .(chain, resno, resid, region, x, y, z)]
+    } else {
+      # One point per RESIDUE (side-chain centroid, or the CA itself)
+      dt_points <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)),
+                            by = .(chain, resno, resid, region)]
+    }
+    dt_ab <- dt_points[chain %in% c("H", "L")]
+    dt_ag <- dt_points[!chain %in% c("H", "L")]
     
     # Build pdb_id
     ch_h  <- dt_ab[chain == "H", unique(chain)]
@@ -62,347 +80,357 @@ gen_df_contacts <- function(pdb_path) {
     ch_ag <- dt_ag[, unique(chain)]
     pdb_id_str <- paste(tools::file_path_sans_ext(file_name), ch_h, ch_l, ch_ag, sep = "_")
     
-    dt_ab[, .dummy := 1L]
-    dt_ag[, .dummy := 1L]
+    dt_contacts <- gen_unique_residue_contacts(dt_ab, dt_ag, cutoff)
+    if (is.null(dt_contacts)) {
+      return(list(ok = FALSE, filename = file_name, path = pdb_path, error = "no contacts"))
+    }
+    dt_contacts <- dt_contacts[resid_ab %in% aa & resid_ag %in% aa] |>
+      _[, pdb_id := pdb_id_str] |>
+      setcolorder(c("pdb_id", "resid_ab", "resno_ab", "chain_ab", "region_ab",
+                    "resid_ag", "resno_ag", "chain_ag"))
     
-    dt_contacts <- dt_ab[dt_ag, on = ".dummy", allow.cartesian = TRUE] |>
-      _[, dist := sqrt((x - i.x)^2 + (y - i.y)^2 + (z - i.z)^2)] |>
-      _[dist <= DistCutoff] |>
-      _[resid %in% aa & i.resid %in% aa] |>
-      _[, .(
-        pdb_id   = pdb_id_str,
-        resid_ab = resid,
-        resno_ab = resno,
-        chain_ab = chain,
-        region_ab = region,
-        resid_ag = i.resid,
-        resno_ag = i.resno,
-        chain_ag = i.chain
-      )]
     return(list(ok = TRUE, contacts = dt_contacts))
   }, error = function(e) {
     return(list(ok = FALSE, filename = file_name, path = pdb_path, error = e$message))
   })
 }
 
-### Launch in parallel
-with_progress({
-  results_list <- future_map(
-    all_pdbs,
-    gen_df_contacts,   
-    .options = furrr_options(seed = TRUE),
-    .progress = TRUE
+
+### ADDING ###
+
+for (repr in names(REPR_PARAMS)) {
+  
+  cat("\n>>> Representation:", repr, "| cutoff:", REPR_PARAMS[[repr]]$cutoff, "A\n")
+  results_dir <- file.path(base_results_dir, repr)
+  dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  ### Launch in parallel
+  with_progress({
+    results_list <- future_map(
+      all_pdbs,
+      gen_df_contacts,
+      representation = repr,
+      .options = furrr_options(seed = TRUE),
+      .progress = TRUE
+    )
+  })
+  
+  ### Filter valid results
+  valid_results <- keep(results_list, ~ .x$ok)
+  failed_files  <- map_chr(discard(results_list, ~ .x$ok), "filename")
+  cat("File falliti:", length(failed_files), "\n")
+  if (length(failed_files) > 0) {
+    writeLines(failed_files, file.path(results_dir, "failed_files.txt"))
+  }
+  
+  ### Combine results
+  df_contacts <- rbindlist(
+    map(valid_results, "contacts"),
+    use.names = TRUE
   )
-})
-
-### Filter valid results
-valid_results <- keep(results_list, ~ .x$ok)
-failed_files  <- map_chr(discard(results_list, ~ .x$ok), "filename")
-cat("File falliti:", length(failed_files), "\n")
-if (length(failed_files) > 0) {
-  writeLines(failed_files, file.path(results_dir, "failed_files.txt"))
-}
-
-### Combine results
-df_contacts <- rbindlist(
-  map(valid_results, "contacts"),
-  use.names = TRUE
-)
-
-### Compute residue counts at the interface
-residue_counts_ab <- df_contacts[, .(resid_ab, resno_ab, chain_ab, pdb_id)] |>
-  unique() |>
-  _[, .N, by = resid_ab]
-
-residue_counts_ag <- df_contacts[, .(resid_ag, resno_ag, chain_ag, pdb_id)] |>
-  unique() |>
-  _[, .N, by = resid_ag]
-
-saveRDS(df_contacts,      file.path(results_dir, "df_contacts.rds"))
-saveRDS(residue_counts_ab, file.path(results_dir, "residue_counts_ab.rds"))
-saveRDS(residue_counts_ag, file.path(results_dir, "residue_counts_ag.rds"))
-
-fwrite(df_contacts,       file.path(results_dir, "df_contacts.csv"))
-fwrite(residue_counts_ab, file.path(results_dir, "residue_counts_ab.csv"))
-fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
-
-### Compute frequencies and statistical potentials
-
-# # ASYMMETRIC PART
-# F(x,y) -> df_fxy
-# F(x) -> df_fx
-# F(y) -> df_fy
-# E(x,y) = - ln(F(x,y) / (F(x) * F(y))) * 2.479
-# 
-# H1: 26:32
-# H2: 52:56
-# H3: 95:102
-# 
-# L1: 24:34
-# L2: 50:56
-# L3: 89:97
-
-get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
-  df_contacts <- copy(df_contacts)
-  aa <- aa.table$aa3[1:20]
-  kBT <- 2.479
   
-  all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
-    _[, pair := paste(resid_ab, resid_ag, sep = "-")]
+  ### Compute residue counts at the interface
+  residue_counts_ab <- df_contacts[, .(resid_ab, resno_ab, chain_ab, pdb_id)] |>
+    unique() |>
+    _[, .N, by = resid_ab]
   
-  df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
+  residue_counts_ag <- df_contacts[, .(resid_ag, resno_ag, chain_ag, pdb_id)] |>
+    unique() |>
+    _[, .N, by = resid_ag]
   
-  if (part == 'all') {
-    df_contacts <- df_contacts
-  } else {
-    df_contacts <- df_contacts[region_ab == part]
+  saveRDS(df_contacts,      file.path(results_dir, "df_contacts.rds"))
+  saveRDS(residue_counts_ab, file.path(results_dir, "residue_counts_ab.rds"))
+  saveRDS(residue_counts_ag, file.path(results_dir, "residue_counts_ag.rds"))
+  
+  fwrite(df_contacts,       file.path(results_dir, "df_contacts.csv"))
+  fwrite(residue_counts_ab, file.path(results_dir, "residue_counts_ab.csv"))
+  fwrite(residue_counts_ag, file.path(results_dir, "residue_counts_ag.csv"))
+  
+  ### Compute frequencies and statistical potentials
+  
+  # # ASYMMETRIC PART
+  # F(x,y) -> df_fxy
+  # F(x) -> df_fx
+  # F(y) -> df_fy
+  # E(x,y) = - ln(F(x,y) / (F(x) * F(y))) * 2.479
+  # 
+  # H1: 26:32
+  # H2: 52:56
+  # H3: 95:102
+  # 
+  # L1: 24:34
+  # L2: 50:56
+  # L3: 89:97
+  
+  get_asymmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
+    df_contacts <- copy(df_contacts)
+    aa <- aa.table$aa3[1:20]
+    kBT <- 2.479
+    
+    all_pairs <- CJ(resid_ab = aa, resid_ag = aa) |>
+      _[, pair := paste(resid_ab, resid_ag, sep = "-")]
+    
+    df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
+    
+    if (part == 'all') {
+      df_contacts <- df_contacts
+    } else {
+      df_contacts <- df_contacts[region_ab == part]
+    }
+    
+    df_fxy <- df_contacts[, .(count = .N), by = .(resid_ag, resid_ab)][, freq := count / sum(count)]
+    df_fx  <- df_contacts[, .(count = .N), by = resid_ag][, freq := count / sum(count)]
+    df_fy  <- df_contacts[, .(count = .N), by = resid_ab][, freq := count / sum(count)]
+    
+    df_potential <- df_fxy |>
+      _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
+      _[, .(pair, resid_ag, resid_ab, freq, count)] |>
+      _[df_fx[, .(freq_ag = freq), by = resid_ag], on = "resid_ag"] |>
+      _[df_fy[, .(freq_ab = freq), by = resid_ab], on = "resid_ab"] |>
+      _[, potential := kBT * log(1 + count * sigma) -
+          kBT * log(1 + count * sigma * (freq / (freq_ag * freq_ab)))]
+    
+    df_potential_complete <- merge(
+      all_pairs,
+      df_potential[, .(pair, potential)],
+      by = "pair",
+      all.x = TRUE
+    )[, .(resid_ag, resid_ab, potential)] |>
+      _[, potential := fifelse(is.na(potential), 0, potential)] |>
+      _[, part := part]
+    
+    return(df_potential_complete)
   }
   
-  df_fxy <- df_contacts[, .(count = .N), by = .(resid_ag, resid_ab)][, freq := count / sum(count)]
-  df_fx  <- df_contacts[, .(count = .N), by = resid_ag][, freq := count / sum(count)]
-  df_fy  <- df_contacts[, .(count = .N), by = resid_ab][, freq := count / sum(count)]
-  
-  df_potential <- df_fxy |>
-    _[, pair := paste(resid_ab, resid_ag, sep = "-")] |>
-    _[, .(pair, resid_ag, resid_ab, freq, count)] |>
-    _[df_fx[, .(freq_ag = freq), by = resid_ag], on = "resid_ag"] |>
-    _[df_fy[, .(freq_ab = freq), by = resid_ab], on = "resid_ab"] |>
-    _[, potential := kBT * log(1 + count * sigma) -
-        kBT * log(1 + count * sigma * (freq / (freq_ag * freq_ab)))]
-  
-  df_potential_complete <- merge(
-    all_pairs,
-    df_potential[, .(pair, potential)],
-    by = "pair",
-    all.x = TRUE
-  )[, .(resid_ag, resid_ab, potential)] |>
-    _[, potential := fifelse(is.na(potential), 0, potential)] |>
-    _[, part := part]
-  
-  return(df_potential_complete)
-}
-
-get_symmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
-  df_contacts <- copy(df_contacts)
-  aa <- aa.table$aa3[1:20]
-  kBT <- 2.479
-  
-  # All the 210 non ordered aminop acids pairs (avoid ARG-LYS / LYS-ARG duplicates)
-  all_pairs <- CJ(resid_i = aa, resid_j = aa) |>
-    _[resid_i <= resid_j] |>
-    _[, pair := paste(resid_i, resid_j, sep = "-")]
-  
-  df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
-  
-  if (part == 'all') {
-    df_contacts <- df_contacts
-  } else {
-    df_contacts <- df_contacts[region_ab == part]
-  }
-  
-  # Etichetta non ordinata per ogni contatto: resid_i <= resid_j alfabeticamente
-  df_contacts <- df_contacts |>
-    _[, `:=`(
-      resid_i = fifelse(resid_ab <= resid_ag, resid_ab, resid_ag),
-      resid_j = fifelse(resid_ab <= resid_ag, resid_ag, resid_ab)
-    )]
-  
-  # F(x,y): frequenza osservata della coppia non ordinata
-  df_fxy <- df_contacts[, .(count = .N), by = .(resid_i, resid_j)][, freq := count / sum(count)]
-  
-  # F(x): UNICA distribuzione marginale, ottenuta mettendo insieme ab e ag
-  df_pool <- rbindlist(list(
-    df_contacts[, .(resid = resid_ab)],
-    df_contacts[, .(resid = resid_ag)]
-  ))
-  df_f <- df_pool[, .(count = .N), by = resid][, freq := count / sum(count)]
-  
-  freq_i_dt <- df_f[, .(resid_i = resid, freq_i = freq)]
-  freq_j_dt <- df_f[, .(resid_j = resid, freq_j = freq)]
-  
-  df_potential <- df_fxy |>
-    _[, pair := paste(resid_i, resid_j, sep = "-")] |>
-    _[, .(pair, resid_i, resid_j, freq, count)] |>
-    _[freq_i_dt, on = "resid_i"] |>
-    _[freq_j_dt, on = "resid_j"] |>
-    _[, ref_freq := fifelse(resid_i == resid_j, freq_i * freq_j, 2 * freq_i * freq_j)] |>
-    _[, potential := kBT * log(1 + count * sigma) -
-        kBT * log(1 + count * sigma * (freq / ref_freq))]
-  
-  df_potential_complete <- merge(
-    all_pairs,
-    df_potential[, .(pair, potential)],
-    by = "pair",
-    all.x = TRUE
-  )[, .(resid_i, resid_j, potential)] |>
-    _[, potential := fifelse(is.na(potential), 0, potential)] |>
-    _[, part := part]
-  
-  return(df_potential_complete)
-}
-
-parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
-
-### ASYM ###
-
-potentials_list <- map(parts, ~ get_asymmetric_potential(df_contacts, part = .x))
-names(potentials_list) <- parts
-
-# Merge in a unique long dataframe, withe the `part` column to distinguish it
-df_potential_combined <- rbindlist(potentials_list)
-saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.rds"))
-fwrite(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.csv"))
-
-### SYM ###
-
-sym_potentials_list <- map(parts, ~ get_symmetric_potential(df_contacts, part = .x))
-names(sym_potentials_list) <- parts
-
-df_sym_potential_combined <- rbindlist(sym_potentials_list)
-saveRDS(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.rds"))
-fwrite(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.csv"))
-
-
-### Build the 20x20 matrix from the data.table long
-build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, aa_order = amino_acids) {
-  
-  dt <- df_potential[part == part_name]
-  
-  if (!symmetric) {
-    # Asymmetric potential: rows = resid_ab, columns = resid_ag
-    mat_dt <- data.table::dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
-    rn  <- mat_dt$resid_ab
-    mat <- as.matrix(mat_dt[, -1, with = FALSE])
-    rownames(mat) <- rn
-  } else {
-    # Symmetric potential
-    dt_full <- rbindlist(list(
-      dt[, .(resid_i, resid_j, potential)],
-      dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
+  get_symmetric_potential <- function(df_contacts, part = 'all', sigma = S) {
+    df_contacts <- copy(df_contacts)
+    aa <- aa.table$aa3[1:20]
+    kBT <- 2.479
+    
+    # All the 210 non ordered aminop acids pairs (avoid ARG-LYS / LYS-ARG duplicates)
+    all_pairs <- CJ(resid_i = aa, resid_j = aa) |>
+      _[resid_i <= resid_j] |>
+      _[, pair := paste(resid_i, resid_j, sep = "-")]
+    
+    df_contacts <- df_contacts[(resid_ab %in% aa) & (resid_ag %in% aa)]
+    
+    if (part == 'all') {
+      df_contacts <- df_contacts
+    } else {
+      df_contacts <- df_contacts[region_ab == part]
+    }
+    
+    # Etichetta non ordinata per ogni contatto: resid_i <= resid_j alfabeticamente
+    df_contacts <- df_contacts |>
+      _[, `:=`(
+        resid_i = fifelse(resid_ab <= resid_ag, resid_ab, resid_ag),
+        resid_j = fifelse(resid_ab <= resid_ag, resid_ag, resid_ab)
+      )]
+    
+    # F(x,y): frequenza osservata della coppia non ordinata
+    df_fxy <- df_contacts[, .(count = .N), by = .(resid_i, resid_j)][, freq := count / sum(count)]
+    
+    # F(x): UNICA distribuzione marginale, ottenuta mettendo insieme ab e ag
+    df_pool <- rbindlist(list(
+      df_contacts[, .(resid = resid_ab)],
+      df_contacts[, .(resid = resid_ag)]
     ))
-    mat_dt <- data.table::dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
-    rn  <- mat_dt$resid_i
-    mat <- as.matrix(mat_dt[, -1, with = FALSE])
-    rownames(mat) <- rn
+    df_f <- df_pool[, .(count = .N), by = resid][, freq := count / sum(count)]
+    
+    freq_i_dt <- df_f[, .(resid_i = resid, freq_i = freq)]
+    freq_j_dt <- df_f[, .(resid_j = resid, freq_j = freq)]
+    
+    df_potential <- df_fxy |>
+      _[, pair := paste(resid_i, resid_j, sep = "-")] |>
+      _[, .(pair, resid_i, resid_j, freq, count)] |>
+      _[freq_i_dt, on = "resid_i"] |>
+      _[freq_j_dt, on = "resid_j"] |>
+      _[, ref_freq := fifelse(resid_i == resid_j, freq_i * freq_j, 2 * freq_i * freq_j)] |>
+      _[, potential := kBT * log(1 + count * sigma) -
+          kBT * log(1 + count * sigma * (freq / ref_freq))]
+    
+    df_potential_complete <- merge(
+      all_pairs,
+      df_potential[, .(pair, potential)],
+      by = "pair",
+      all.x = TRUE
+    )[, .(resid_i, resid_j, potential)] |>
+      _[, potential := fifelse(is.na(potential), 0, potential)] |>
+      _[, part := part]
+    
+    return(df_potential_complete)
   }
   
-  # Order amino acids according to Kyte-Doolittle scale
-  mat <- mat[aa_order, aa_order]
-  return(mat)
-}
-
-### Generate and save the matrices .png
-plot_potential_heatmap <- function(df_potential,
-                                   part_name,
-                                   symmetric  = FALSE,
-                                   aa_order   = amino_acids,
-                                   title_prefix = "Whole-Interface Potential",
-                                   save_dir   = results_dir,
-                                   save       = TRUE,
-                                   width = 7, height = 6,
-                                   global_lim = NULL) {
+  parts <- c("all", "h1", "h2", "h3", "l1", "l2", "l3")
   
-  mat <- build_potential_matrix(df_potential, part_name, symmetric = symmetric, aa_order = aa_order)
+  ### ASYM ###
   
-  if (is.null(global_lim)) {
-    pot_min <- min(mat, na.rm = TRUE)
-    pot_max <- max(mat, na.rm = TRUE)
-    lim     <- max(abs(pot_min), abs(pot_max))
-  } else {
-    lim <- global_lim
+  potentials_list <- map(parts, ~ get_asymmetric_potential(df_contacts, part = .x))
+  names(potentials_list) <- parts
+  
+  # Merge in a unique long dataframe, withe the `part` column to distinguish it
+  df_potential_combined <- rbindlist(potentials_list)
+  saveRDS(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.rds"))
+  fwrite(df_potential_combined, file.path(results_dir, "whole_int_asym_potential.csv"))
+  
+  ### SYM ###
+  
+  sym_potentials_list <- map(parts, ~ get_symmetric_potential(df_contacts, part = .x))
+  names(sym_potentials_list) <- parts
+  
+  df_sym_potential_combined <- rbindlist(sym_potentials_list)
+  saveRDS(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.rds"))
+  fwrite(df_sym_potential_combined, file.path(results_dir, "whole_int_sym_potential.csv"))
+  
+  
+  ### Build the 20x20 matrix from the data.table long
+  build_potential_matrix <- function(df_potential, part_name, symmetric = FALSE, aa_order = amino_acids) {
+    
+    dt <- df_potential[part == part_name]
+    
+    if (!symmetric) {
+      # Asymmetric potential: rows = resid_ab, columns = resid_ag
+      mat_dt <- data.table::dcast(dt, resid_ab ~ resid_ag, value.var = "potential")
+      rn  <- mat_dt$resid_ab
+      mat <- as.matrix(mat_dt[, -1, with = FALSE])
+      rownames(mat) <- rn
+    } else {
+      # Symmetric potential
+      dt_full <- rbindlist(list(
+        dt[, .(resid_i, resid_j, potential)],
+        dt[resid_i != resid_j, .(resid_i = resid_j, resid_j = resid_i, potential)]
+      ))
+      mat_dt <- data.table::dcast(dt_full, resid_i ~ resid_j, value.var = "potential")
+      rn  <- mat_dt$resid_i
+      mat <- as.matrix(mat_dt[, -1, with = FALSE])
+      rownames(mat) <- rn
+    }
+    
+    # Order amino acids according to Kyte-Doolittle scale
+    mat <- mat[aa_order, aa_order]
+    return(mat)
   }
   
-  type_label <- if (symmetric) "Symmetric" else "Asymmetric"
-  main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
-  
-  if (!symmetric) {
-    # Asymmetric case: Make an explicit flag (antigen residue vs antibody residue)
-    row_labels <- paste0(rownames(mat), " (Ab)")
-    col_labels <- paste0(colnames(mat), " (Ag)")
-    main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
-  } else {
-    row_labels <- rownames(mat)
-    col_labels <- colnames(mat)
+  ### Generate and save the matrices .png
+  plot_potential_heatmap <- function(df_potential,
+                                     part_name,
+                                     symmetric  = FALSE,
+                                     aa_order   = amino_acids,
+                                     title_prefix = "Whole-Interface Potential",
+                                     save_dir   = results_dir,
+                                     save       = TRUE,
+                                     width = 7, height = 6,
+                                     global_lim = NULL) {
+    
+    mat <- build_potential_matrix(df_potential, part_name, symmetric = symmetric, aa_order = aa_order)
+    
+    if (is.null(global_lim)) {
+      pot_min <- min(mat, na.rm = TRUE)
+      pot_max <- max(mat, na.rm = TRUE)
+      lim     <- max(abs(pot_min), abs(pot_max))
+    } else {
+      lim <- global_lim
+    }
+    
+    type_label <- if (symmetric) "Symmetric" else "Asymmetric"
+    main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
+    
+    if (!symmetric) {
+      # Asymmetric case: Make an explicit flag (antigen residue vs antibody residue)
+      row_labels <- paste0(rownames(mat), " (Ab)")
+      col_labels <- paste0(colnames(mat), " (Ag)")
+      main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
+    } else {
+      row_labels <- rownames(mat)
+      col_labels <- colnames(mat)
+    }
+    
+    p <- pheatmap(mat,
+                  color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
+                  breaks = seq(-lim, lim, length.out = 51),
+                  cluster_rows = FALSE,
+                  cluster_cols = FALSE,
+                  main = main_title,
+                  labels_row = row_labels,
+                  labels_col = col_labels,
+                  display_numbers = FALSE,
+                  fontsize = 10,
+                  silent = TRUE)
+    
+    gg_heatmap <- as.ggplot(p$gtable)
+    
+    if (save) {
+      file_suffix <- if (symmetric) "sym" else "asym"
+      file_name   <- paste0("heatmap_", file_suffix, "_", part_name, ".png")
+      ggsave(filename = file.path(save_dir, file_name),
+             plot = gg_heatmap, width = width, height = height, dpi = 300, bg = "white")
+    }
+    
+    return(gg_heatmap)
   }
   
-  p <- pheatmap(mat,
-                color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
-                breaks = seq(-lim, lim, length.out = 51),
-                cluster_rows = FALSE,
-                cluster_cols = FALSE,
-                main = main_title,
-                labels_row = row_labels,
-                labels_col = col_labels,
-                display_numbers = FALSE,
-                fontsize = 10,
-                silent = TRUE)
+  # Color limit shared among matrices, for better visual comparisons
+  lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
+  lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
   
-  gg_heatmap <- as.ggplot(p$gtable)
+  heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
+                                                       part_name = .x,
+                                                       symmetric = FALSE,
+                                                       global_lim = lim_asym))
+  names(heatmaps_asym) <- parts
   
-  if (save) {
-    file_suffix <- if (symmetric) "sym" else "asym"
-    file_name   <- paste0("heatmap_", file_suffix, "_", part_name, ".png")
+  heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
+                                                      part_name = .x,
+                                                      symmetric = TRUE,
+                                                      global_lim = lim_sym))
+  names(heatmaps_sym) <- parts
+  
+  ### Pearson correlation between region potentials (same representation)
+  compute_part_correlation <- function(df_potential, symmetric = FALSE, part_order = parts) {
+    dt <- copy(df_potential)
+    if (symmetric) {
+      dt[, pair_key := paste(resid_i, resid_j, sep = "-")]
+    } else {
+      dt[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
+    }
+    
+    # Reshape: rows = pair_key, columns = part, values = potential
+    wide_dt <- dcast(dt, pair_key ~ part, value.var = "potential")
+    mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
+    rownames(mat_for_cor) <- wide_dt$pair_key
+    
+    # dcast orders columns alphabetically: restore the order of `parts`
+    cor(mat_for_cor[, part_order], method = "pearson", use = "pairwise.complete.obs")
+  }
+  
+  plot_correlation_heatmap <- function(cor_matrix, title, file_name, save_dir = results_dir) {
+    p <- pheatmap(cor_matrix,
+                  color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(100),
+                  breaks = seq(-1, 1, length.out = 101),
+                  display_numbers = TRUE,
+                  number_format = "%.2f",
+                  cluster_rows = FALSE,
+                  cluster_cols = FALSE,
+                  main = title,
+                  silent = TRUE)
     ggsave(filename = file.path(save_dir, file_name),
-           plot = gg_heatmap, width = width, height = height, dpi = 300, bg = "white")
+           plot = as.ggplot(p$gtable), width = 7, height = 6, dpi = 300, bg = "white")
   }
   
-  return(gg_heatmap)
+  ### SYM ###
+  cor_sym <- compute_part_correlation(df_sym_potential_combined, symmetric = TRUE)
+  fwrite(as.data.table(cor_sym, keep.rownames = "part"),
+         file.path(results_dir, "cor_sym_potential.csv"))
+  plot_correlation_heatmap(cor_sym,
+                           title = paste("Pearson correlation between symmetric region potentials -", repr),
+                           file_name = "cor_heatmap_sym.png")
+  
+  ### ASYM ###
+  cor_asym <- compute_part_correlation(df_potential_combined, symmetric = FALSE)
+  fwrite(as.data.table(cor_asym, keep.rownames = "part"),
+         file.path(results_dir, "cor_asym_potential.csv"))
+  plot_correlation_heatmap(cor_asym,
+                           title = paste("Pearson correlation between asymmetric region potentials -", repr),
+                           file_name = "cor_heatmap_asym.png")
+  
 }
-
-# Color limit shared among matrices, for better visual comparisons
-lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
-lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
-
-heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
-                                                     part_name = .x,
-                                                     symmetric = FALSE,
-                                                     global_lim = lim_asym))
-names(heatmaps_asym) <- parts
-
-heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
-                                                    part_name = .x,
-                                                    symmetric = TRUE,
-                                                    global_lim = lim_sym))
-names(heatmaps_sym) <- parts
-
-### Compute perason correlation between statistical potential matrices
-
-sym_matrices <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
-
-# Crea una chiave univoca per ogni coppia di residui (resid_i, resid_j)
-sym_matrices[, pair_key := paste(resid_i, resid_j, sep = "-")]
-
-# Reshape: righe = pair_key, colonne = part, valori = potential
-wide_dt <- dcast(sym_matrices, pair_key ~ part, value.var = "potential")
-
-# Matrice numerica (esclude pair_key)
-mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
-rownames(mat_for_cor) <- wide_dt$pair_key
-
-# Correlazione di Pearson a coppie tra tutte le parti
-cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
-
-print(cor_matrix)
-
-pheatmap(cor_matrix,
-                   display_numbers = TRUE,
-                   cluster_rows = FALSE,
-                   cluster_cols = FALSE,
-                   main = "Pearson correlation between symmetric region potentials")
-
-asym_matrices <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
-
-sym_matrices[, pair_key := paste(resid_ab, resid_ag, sep = "-")]
-
-# Reshape: righe = pair_key, colonne = part, values = potential
-wide_dt <- dcast(sym_matrices, pair_key ~ part, value.var = "potential")
-mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
-rownames(mat_for_cor) <- wide_dt$pair_key
-
-# Compute pairwise Pearson correlation coefficient
-cor_matrix <- cor(mat_for_cor, method = "pearson", use = "pairwise.complete.obs")
-pheatmap(cor_matrix,
-         display_numbers = TRUE,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Pearson correlation between asymmetric region potentials")
