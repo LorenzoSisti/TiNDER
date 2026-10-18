@@ -10,11 +10,10 @@
 
 ### Required libraries
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2)
+               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
 
 # Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
-#source("/path/to/your/custom/functions/files/functions.R")
-source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+source("/Users/lorenzosisti/TiNDER/functions.R")
 
 ### Set up parallelization to speed up computation
 plan(multisession, workers = parallel::detectCores() - 1)
@@ -23,12 +22,9 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-#results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/"
 base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/"
-dir.create(results_dir, showWarnings = FALSE)
+dir.create(base_results_dir, showWarnings = FALSE)
 
-# Distance cutoff (Å) to define contact between side-chains centroids
-DistCutoff <- 8.5  
 S <- 0.02
 
 ### Parameters per representation
@@ -36,6 +32,13 @@ REPR_PARAMS <- list(
   sc_centroid = list(cutoff = 8.5),
   ca          = list(cutoff = 12.0),   
   all_atom    = list(cutoff = 6.0)
+)
+
+### Labels used in plot titles
+REPR_LABELS <- c(
+  sc_centroid = "SC-CG",
+  ca          = "C-alpha-CG",
+  all_atom    = "All-atom"
 )
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
@@ -316,7 +319,8 @@ for (repr in names(REPR_PARAMS)) {
                                      part_name,
                                      symmetric  = FALSE,
                                      aa_order   = amino_acids,
-                                     title_prefix = "Whole-Interface Potential",
+                                     title_prefix = "whole-interface potential",
+                                     repr_label = NULL,
                                      save_dir   = results_dir,
                                      save       = TRUE,
                                      width = 7, height = 6,
@@ -332,8 +336,9 @@ for (repr in names(REPR_PARAMS)) {
       lim <- global_lim
     }
     
-    type_label <- if (symmetric) "Symmetric" else "Asymmetric"
-    main_title <- paste(type_label, title_prefix, "-", toupper(part_name))
+    type_label <- if (symmetric) "symmetric" else "asymmetric"
+    main_title <- paste(repr_label, type_label, title_prefix)
+    if (part_name != "all") main_title <- paste0(main_title, " - ", toupper(part_name))
     
     if (!symmetric) {
       # Asymmetric case: Make an explicit flag (antigen residue vs antibody residue)
@@ -346,7 +351,7 @@ for (repr in names(REPR_PARAMS)) {
     }
     
     p <- pheatmap(mat,
-                  color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
+                  viridisLite::plasma(50, direction = -1),
                   breaks = seq(-lim, lim, length.out = 51),
                   cluster_rows = FALSE,
                   cluster_cols = FALSE,
@@ -376,13 +381,15 @@ for (repr in names(REPR_PARAMS)) {
   heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
                                                        part_name = .x,
                                                        symmetric = FALSE,
-                                                       global_lim = lim_asym))
+                                                       global_lim = lim_asym,
+                                                       repr_label = REPR_LABELS[[repr]]))
   names(heatmaps_asym) <- parts
   
   heatmaps_sym <- map(parts, ~ plot_potential_heatmap(df_sym_potential_combined,
                                                       part_name = .x,
                                                       symmetric = TRUE,
-                                                      global_lim = lim_sym))
+                                                      global_lim = lim_sym,
+                                                      repr_label = REPR_LABELS[[repr]]))
   names(heatmaps_sym) <- parts
   
   ### Pearson correlation between region potentials (same representation)
@@ -405,8 +412,8 @@ for (repr in names(REPR_PARAMS)) {
   
   plot_correlation_heatmap <- function(cor_matrix, title, file_name, save_dir = results_dir) {
     p <- pheatmap(cor_matrix,
-                  color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(100),
-                  breaks = seq(-1, 1, length.out = 101),
+                  color = viridisLite::plasma(50, direction = -1),
+                  breaks = seq(-1, 1, length.out = 51),
                   display_numbers = TRUE,
                   number_format = "%.2f",
                   cluster_rows = FALSE,
