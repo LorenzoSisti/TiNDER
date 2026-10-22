@@ -5,7 +5,7 @@ pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2)
 
 # Define the path to a custom function files
-source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+source("/Users/lorenzosisti/TiNDER/functions.R")
 
 # Distance cutoff (Å) to define contact between side-chains centroids
 DistCutoff <- 8.5  
@@ -141,13 +141,13 @@ df_pct_fw <- df_contacts[, .(
 
 ### Istogramma della percentuale di fw sul totale dei contatti, per posa
 p <- ggplot(df_pct_fw, aes(x = pct_fw)) +
-  geom_histogram(binwidth = 5, fill = "dodgerblue2", color = "white", boundary = 0) +
+  geom_histogram(binwidth = 5, fill = "#CC4678FF", color = "white", boundary = 0) +
   labs(
     #title = "Distribuzione della percentuale di contatti framework (fw) per posa",
-    x = "% framework contacts over all contacts",
-    y = "Docking model counts"
+    x = "Percentage of framework contacts per docking pose",
+    y = "Docking poses"
   ) +
-  theme_minimal(base_size = 13)
+  theme_minimal()
 
 ### Soglia di accettazione
 fw_threshold <- 25  # percentuale massima di contatti fw ammessa

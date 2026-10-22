@@ -10,7 +10,7 @@ library(purrr)
 library(progressr)
 library(ggplot2)
 
-source("/Path/to/your/functions/file/functions.R")
+source("/Users/lorenzosisti/TiNDER/functions.R")
 
 ### Set parallelization to speed up computations (use all available CPU but one) ###
 plan(multisession, workers = parallel::detectCores() - 1)
@@ -18,8 +18,9 @@ handlers(global = TRUE)
 handlers("rstudio")
 
 ### Setting paths, directories and global variables ###
-pdb_dir <- "/path/to/your/non/redundant/pdb/files/directory/"
-files_dir <- "/path/to/the/directory/where/you/want/to/save/the/scores/"
+pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+files_dir <- "/Users/lorenzosisti/TiNDER/data/hydropathy_complementarity"
+dir.create(files_dir, showWarnings = FALSE, recursive = TRUE)
 
 DistCutoff <- 8.5  # Two residues are defined as "in contact" if the centroids of their side chain are at less than 8.5 Angstroms
 
@@ -30,13 +31,17 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 ### MAIN ###
 
 Hr_complementarity <- hydropathy_complementarity_matrix(
-  milanetti_scale_path = "/Path/to/the/hydrophobicity/scale/MilanettiScale.csv",
+  milanetti_scale_path = "/Users/lorenzosisti/TiNDER/Antibody_antigen_interfaces_characterization //MilanettiScale.csv",
   amino_acids = amino_acids
 )
 
 Hr_vector    <- Hr_complementarity$Hr_vector
 Hr_matrix <- Hr_complementarity$Hr_matrix
 print(round(Hr_matrix, 3))
+
+### Save results ###
+write.csv(Hr_matrix, file.path(files_dir, "Hr_complementarity_matrix.csv"), row.names = TRUE)
+saveRDS(Hr_matrix, file.path(files_dir, "Hr_complementarity_matrix.rds"))
 
 all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 

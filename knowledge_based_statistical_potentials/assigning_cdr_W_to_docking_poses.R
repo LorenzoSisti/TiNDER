@@ -3,36 +3,78 @@
 # UTILIZZA DATA.TABLE PER ASSOCIARE I CONTATTI ALLA CORRETTA MATRICE CDR
 ################################################################################
 
-### 1. CARICAMENTO LIBRERIE
+# ATTENTION: YOU ALSO NEED TO DECOMMENT THE SAVING FUNCTION AT THE END FOR INTERACTIVE EXECUTION
+
+#########################################################################################
+### DECOMMENT FOR BATCH EXECUTION
+#########################################################################################
+
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr, data.table, stringr)
-
-# Caricamento funzioni custom
 source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
-#source("/path/to/your/custom/functions/files/functions.R") 
 
-### 2. CONFIGURAZIONE PARALLELIZZAZIONE
-plan(multisession, workers = parallel::detectCores() - 1)
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) stop("Usage: Rscript score_cdr.R <pot_dir> <dockq_csv> [n_workers] [pdb_dir]")
+pot_dir     <- args[1]                       # folder containing whole_int_*_potential.csv (the sc_centroid one)
+dockq_file  <- args[2]
+n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
+pdb_dir     <- if (length(args) >= 4) args[4] else "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+results_dir <- pot_dir
+
+if (file.exists(file.path(results_dir, "cdr_score_dockq.csv"))) {
+  message("Already done: ", results_dir); quit(save = "no", status = 0)
+}
+
+if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
 handlers(global = TRUE)
-handlers("rstudio")
-
-### 3. PARAMETRI GLOBALI E DIRECTORY
-pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
-#pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
-results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose"
-dir.create(results_dir, showWarnings = FALSE)
+handlers("progress")
 
 DistCutoff <- 8.5
+amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 
-# Ordine degli aminoacidi
-amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
-                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
+all_docked_pdbs <- list.files(pdb_dir, pattern = "\\.pdb$", recursive = TRUE, full.names = TRUE)
 
-# Recupero di tutti i file PDB
-all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+df_asym_long <- fread(file.path(pot_dir, "whole_int_asym_potential.csv"))
+df_sym_long  <- fread(file.path(pot_dir, "whole_int_sym_potential.csv"))
 
-### 4. PREPARAZIONE MATRICI DEI POTENZIALI (SOLO CDR)
-df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
-df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
+#########################################################################################
+### DECOMMENT FOR INTERACTIVE EXECUTION
+#########################################################################################
+
+# ### 1. CARICAMENTO LIBRERIE
+# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr, data.table, stringr)
+# 
+# # Caricamento funzioni custom
+# source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+# #source("/path/to/your/custom/functions/files/functions.R") 
+# 
+# ### 2. CONFIGURAZIONE PARALLELIZZAZIONE
+# plan(multisession, workers = parallel::detectCores() - 1)
+# handlers(global = TRUE)
+# handlers("rstudio")
+# 
+# ### 3. PARAMETRI GLOBALI E DIRECTORY
+# pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+# #pdb_dir <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06"
+# results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose"
+# dir.create(results_dir, showWarnings = FALSE)
+# 
+# DistCutoff <- 8.5
+# 
+# # Ordine degli aminoacidi
+# amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+#                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
+# 
+# # Recupero di tutti i file PDB
+# all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+# 
+# ### 4. PREPARAZIONE MATRICI DEI POTENZIALI (SOLO CDR)
+# df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_asym_potential.csv")
+# df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl/whole_int_sym_potential.csv")
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
 
 cdr_parts <- c("h1", "h2", "h3", "l1", "l2", "l3")
 
@@ -164,7 +206,23 @@ with_progress({
 
 summary_results <- rbindlist(compact(summary_results_list), use.names = TRUE, fill = TRUE)
 
-### 6. SALVATAGGIO DEI RISULTATI FINALI
-fwrite(summary_results, file = file.path(results_dir, "cdr_score.csv"))
+### DECOMMENT FOR BATCH EXECUTION
 
-cat("\n✅ CDR potentials successfully assigned!\n")
+DOCKQ_ID_COL <- "Model"        # <-- ADJUST
+dockq <- fread(dockq_file)
+if (!DOCKQ_ID_COL %in% names(dockq))
+  stop("Column '", DOCKQ_ID_COL, "' not in DockQ file. Available: ", paste(names(dockq), collapse = ", "))
+
+summary_results[, key := sub("\\.pdb$", "", pdb_filename)]
+dockq[, key := sub("\\.pdb$", "", get(DOCKQ_ID_COL))]
+
+merged <- merge(summary_results, dockq, by = "key", all.x = TRUE)
+merged[, key := NULL]
+fwrite(merged, file.path(results_dir, "cdr_score_dockq.csv"))
+
+### DECOMMENT FOR INTERACTIVE EXECUTION
+
+### 6. SALVATAGGIO DEI RISULTATI FINALI
+# fwrite(summary_results, file = file.path(results_dir, "cdr_score.csv"))
+# 
+# cat("\n✅ CDR potentials successfully assigned!\n")

@@ -347,3 +347,12 @@ print(plot6)
 ggsave(file.path(results_dir, "slope_sym.png"),
        plot = plot6, width = 7, height = 5, dpi = 300, bg = "white")
 
+ggsave(file.path(results_dir, "saturation_sym.pdf"),
+       plot = plot_saturation, width = 8, height = 6, device = cairo_pdf)
+
+ggsave(file.path(results_dir, "avg_sd_sym.pdf"),
+       plot = plot5, width = 8, height = 6, device = cairo_pdf)
+
+ggsave(file.path(results_dir, "slope_sym.pdf"),
+       plot = plot6, width = 8, height = 6, device = cairo_pdf)
+

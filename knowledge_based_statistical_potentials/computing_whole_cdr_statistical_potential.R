@@ -8,48 +8,94 @@
 # 5) VISUALIZING THE RESULTS AS HEATMAPS.
 #########################################################################################
 
+#########################################################################################
+### DECOMMENT FOR BATCH EXECUTION
+#########################################################################################
+
 ### Required libraries
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
-
-# Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
 source("/Users/lorenzosisti/TiNDER/functions.R")
 
-### Set up parallelization to speed up computation
-plan(multisession, workers = parallel::detectCores() - 1)
-handlers(global = TRUE)
-handlers("rstudio")
+### Command-line input
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) stop("Usage: Rscript potential_cdr.R <pdb_list.txt> <out_dir> [n_workers]")
+list_file        <- args[1]
+base_results_dir <- args[2]
+n_workers        <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
 
-### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/"
-dir.create(base_results_dir, showWarnings = FALSE)
+dir.create(base_results_dir, recursive = TRUE, showWarnings = FALSE)
+
+if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
+handlers(global = TRUE)
+handlers("progress")          # "rstudio" doesn't work from a terminal
 
 S <- 0.02
 
-### Parameters per representation
+### Parameters per representation (only sc_centroid)
 REPR_PARAMS <- list(
-  sc_centroid = list(cutoff = 8.5),
-  ca          = list(cutoff = 12.0),   
-  all_atom    = list(cutoff = 6.0)
+  sc_centroid = list(cutoff = 8.5)
+  # ca          = list(cutoff = 12.0),
+  # all_atom    = list(cutoff = 6.0)
 )
-
-### Labels used in plot titles
-REPR_LABELS <- c(
-  sc_centroid = "SC-CG",
-  ca          = "C-alpha-CG",
-  all_atom    = "All-atom"
-)
+REPR_LABELS <- c(sc_centroid = "SC-CG")  # ca = "C-alpha-CG", all_atom = "All-atom"
 
 # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
-amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
-                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
+amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 
-set.seed(1234)
+all_pdbs <- readLines(list_file)
 
-all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+#########################################################################################
+### DECOMMENT FOR INTERACTIVE EXECUTION
+#########################################################################################
+
+# ### Required libraries
+# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+# 
+# # Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
+# source("/Users/lorenzosisti/TiNDER/functions.R")
+# 
+# ### Set up parallelization to speed up computation
+# plan(multisession, workers = parallel::detectCores() - 1)
+# handlers(global = TRUE)
+# handlers("rstudio")
+# 
+# ### Define directories and global parameters
+# pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+# base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/"
+# dir.create(base_results_dir, showWarnings = FALSE)
+# 
+# S <- 0.02
+# 
+# ### Parameters per representation
+# REPR_PARAMS <- list(
+#   sc_centroid = list(cutoff = 8.5),
+#   ca          = list(cutoff = 12.0),   
+#   all_atom    = list(cutoff = 6.0)
+# )
+# 
+# ### Labels used in plot titles
+# REPR_LABELS <- c(
+#   sc_centroid = "SC-CG",
+#   ca          = "C-alpha-CG",
+#   all_atom    = "All-atom"
+# )
+# 
+# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+# amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+#                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
+# 
+# set.seed(1234)
+# 
+# all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
 
 # pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" # Just for single-path testing 
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
 
 ### Generate a contacts dataframe 
 ### N.B. This function relies on the renumber_ab_chains() function (see functions.R)
@@ -59,7 +105,8 @@ gen_df_contacts <- function(pdb_path, representation = "sc_centroid") {
   file_name <- basename(pdb_path)
   tryCatch({
     pdb_aus <- read.pdb(pdb_path)
-    renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path, log_file = "errors.log",
+    renumbered_df <- renumber_ab_chains(pdb_aus, pdb_path,
+                                        log_file = file.path(base_results_dir, "errors.log"),
                                         representation = representation)
     if (!renumbered_df$ok) {
       return(list(ok = FALSE, filename = file_name, path = pdb_path, error = renumbered_df$error))
@@ -342,8 +389,10 @@ for (repr in names(REPR_PARAMS)) {
     
     if (!symmetric) {
       # Asymmetric case: Make an explicit flag (antigen residue vs antibody residue)
-      row_labels <- paste0(rownames(mat), " (Ab)")
-      col_labels <- paste0(colnames(mat), " (Ag)")
+      #row_labels <- paste0(rownames(mat), " (Ab)")
+      #col_labels <- paste0(colnames(mat), " (Ag)")
+      row_labels <- rownames(mat)
+      col_labels <- colnames(mat)
       main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
     } else {
       row_labels <- rownames(mat)

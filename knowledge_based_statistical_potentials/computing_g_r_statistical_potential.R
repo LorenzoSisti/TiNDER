@@ -8,36 +8,78 @@
 # 5) VISUALIZING THE RESULTS AS HEATMAPS.
 #########################################################################################
 
+#########################################################################################
+### DECOMMENT FOR BATCH EXECUTION
+#########################################################################################
+
 ### Required libraries
 pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2)
+               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+source("/Users/lorenzosisti/TiNDER/functions.R")
 
-# Define the path to a custom function files
-#source("/path/to/your/custom/functions/files/functions.R")
-source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+### Command-line input
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) stop("Usage: Rscript potential.R <pdb_list.txt> <out_dir> [n_workers]")
+list_file   <- args[1]
+results_dir <- args[2]
+n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
 
-### Set up parallelization to speed up computation
-plan(multisession, workers = parallel::detectCores() - 1)
+dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+if (file.exists(file.path(results_dir, "ring_sym_potential.csv"))) {
+  message("Already done: ", results_dir); quit(save = "no", status = 0)
+}
+
+if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
 handlers(global = TRUE)
-handlers("rstudio")
+handlers("progress")          # "rstudio" doesn't work from a terminal
 
-### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/"
-dir.create(results_dir, showWarnings = FALSE)
-
-# Distance cutoff (Å) to define contact between side-chains centroids
-DistCutoff <- 8.5  
+DistCutoff <- 8.5
 S <- 0.02
 Nsteps <- 3
+amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 
-# Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
-amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
-                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
+all_pdbs <- readLines(list_file)
 
-set.seed(1234)
+#########################################################################################
+### DECOMMENT FOR INTERACTIVE EXECUTION
+#########################################################################################
 
-all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+# ### Required libraries
+# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+# 
+# # Define the path to a custom function files
+# #source("/path/to/your/custom/functions/files/functions.R")
+# #source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+# source("/Users/lorenzosisti/TiNDER/functions.R")
+# 
+# ### Set up parallelization to speed up computation
+# plan(multisession, workers = parallel::detectCores() - 1)
+# handlers(global = TRUE)
+# handlers("rstudio")
+# 
+# ### Define directories and global parameters
+# pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+# results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl_18_10/"
+# dir.create(results_dir, showWarnings = FALSE)
+# 
+# # Distance cutoff (Å) to define contact between side-chains centroids
+# DistCutoff <- 8.5  
+# S <- 0.02
+# Nsteps <- 3
+# 
+# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+# amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+#                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
+# 
+# set.seed(1234)
+# 
+# all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
 
 gen_df_contacts <- function(pdb_path) {
   aa <- aa.table$aa3[1:20]
@@ -313,7 +355,7 @@ plot_potential_heatmap <- function(df_potential,
                                    ring_name,
                                    symmetric  = FALSE,
                                    aa_order   = amino_acids,
-                                   title_prefix = "Radial Potential",
+                                   title_prefix = "SC-CG",
                                    save_dir   = results_dir,
                                    save       = TRUE,
                                    width = 7, height = 6,
@@ -329,12 +371,17 @@ plot_potential_heatmap <- function(df_potential,
     lim <- global_lim
   }
   
-  type_label <- if (symmetric) "Symmetric" else "Asymmetric"
-  main_title <- paste0(type_label, " ", title_prefix, " - ", toupper(ring_name),
-                       "\n(rows = Antibody, cols = Antigen)")
+  type_label <- if (symmetric) "symmetric" else "asymmetric"
+  main_title <- paste(title_prefix, type_label, "layer-based potential")
+  
+  # Suffix: "1-2" -> "layer 1 - layer 2"
+  layers <- strsplit(ring_name, "-")[[1]]
+  main_title <- paste0(main_title, " - layer ", layers[1], " - layer ", layers[2])
+  
+  if (!symmetric) main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
   
   p <- pheatmap(mat,
-                color = colorRampPalette(c("gold1", "white", "dodgerblue2"))(50),
+                color = viridisLite::plasma(50, direction = -1),,
                 breaks = seq(-lim, lim, length.out = 51),
                 cluster_rows = FALSE,
                 cluster_cols = FALSE,
