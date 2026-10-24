@@ -2,14 +2,41 @@
 ### THIS SHALL BE RUN ONCE, AT THE BEGINNING
 ################################################################################
 
+# DECOMMENT THIS IF RUNNING BATCH JOB WITH run_all.sh
+
 library(data.table)
 
-pdb_dir  <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-out_root <- "/Users/lorenzosisti/TiNDER/data/convergence_asymmetric_CDR/"
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) stop("Usage: Rscript make_groups.R <rep_root> <rep_id>")
+rep_root <- args[1]
+rep_id   <- as.integer(args[2])
 
-seed_list <- c(101, 123, 202, 303, 404, 505, 606, 707, 808, 909)
+pdb_dir  <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+out_root <- file.path(rep_root, "convergence_asymmetric_GR")   # the CDR path is derived from this
+
+seed_list            <- rep_id * 1000 + 1:10
 partitioning_numbers <- c(2, 3, 5, 8, 13, 21, 34, 55, 89, 144)
-ONLY_SELECTED_GROUP  <- TRUE   # FALSE = all n groups; TRUE = 1 random group
+ONLY_SELECTED_GROUP  <- TRUE
+
+################################################################################
+################################################################################
+################################################################################
+
+# DECOMMENT THIS IF RUNNING INTERACTIVE JOB 
+
+# library(data.table)
+# 
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 2) stop("Usage: Rscript make_groups.R <rep_root> <rep_id>")
+# rep_root <- args[1]
+# rep_id   <- as.integer(args[2])
+# 
+# pdb_dir  <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+# out_root <- file.path(rep_root, "convergence_asymmetric_GR")   # the CDR path is derived from this
+# 
+# seed_list            <- rep_id * 1000 + 1:10
+# partitioning_numbers <- c(2, 3, 5, 8, 13, 21, 34, 55, 89, 144)
+# ONLY_SELECTED_GROUP  <- TRUE
 
 pdbL <- sort(list.files(pdb_dir, pattern = "\\.pdb$", recursive = TRUE, full.names = TRUE))
 

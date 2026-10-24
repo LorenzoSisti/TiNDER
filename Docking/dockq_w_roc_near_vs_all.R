@@ -27,28 +27,6 @@ whole_potential_scores <- read.csv(path_pot_af3_whole)
 stratified_potential_scores <- read.csv(path_pot_af3_strat)
 cdr_potentials_scores <- read.csv(path_pot_af3_cdr)
 
-# --- ISTOGRAMMA DI fnat ---
-
-p_fnat <- ggplot(dockq_scores, aes(x = fnat)) +
-  geom_histogram(
-    binwidth = 0.05,
-    boundary = 0,          # allinea i bin a 0, 0.05, 0.10, ...
-    closed   = "left",
-    fill     = "dodgerblue2",
-    color    = "white"
-  ) +
-  scale_x_continuous(
-    breaks = seq(0, 1, by = 0.1),
-    limits = c(-0.025, 1.025)
-  ) +
-  labs(
-    x = "fnat (fraction of native contacts)",
-    y = "Docking model counts"
-  ) +
-  theme_custom
-
-print(p_fnat)
-
 # --- 3. CALCOLO DELLE 6 ROC (ogni oggetto ha ora un nome distinto) ---
 
 ## --- WHOLE ---
@@ -97,8 +75,16 @@ roc_list <- list(
 
 # Palette viridisLite: viola = AUC maggiore, giallo = AUC minore
 auc_num   <- sapply(roc_list, function(r) as.numeric(auc(r)))
-my_colors <- viridisLite::plasma(6)[rank(-auc_num)]
+#my_colors <- viridisLite::plasma(6)[rank(-auc_num)]
 
+# Palette plasma: esclude i toni più chiari iniziali
+my_palette <- viridisLite::plasma(
+  6,
+  begin = 0,
+  end = 0.8
+)
+
+my_colors <- my_palette[rank(-auc_num)]
 # Etichette con AUC
 #auc_values <- sprintf("%.3f", auc_num)
 #new_labels <- paste0(names(roc_list), " (AUC = ", auc_values, ")")

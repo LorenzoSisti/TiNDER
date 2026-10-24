@@ -279,21 +279,22 @@ delta_long <- as.data.frame(t(group_freq_matrix[c("charged", "hydrophobic"), ]))
   pivot_longer(c(charged_delta, hydrophobic_delta), names_to = "Group", values_to = "Value")
 
 colors_delta <- c("charged_delta" = "purple", "hydrophobic_delta" = "#CC4678FF")
-labels_delta <- c("charged_delta" = TeX("Charged residues"),
-                  "hydrophobic_delta" = TeX("Hydrophobic residues"))
+labels_delta <- c("charged_delta" = "Charged residues",
+                  "hydrophobic_delta" = "Hydrophobic residues")
 
 p_delta_rings <- ggplot(delta_long, aes(x = Step, y = Value, fill = Group)) +
   geom_area(position = "identity", alpha = 0.3, color = NA) +
   geom_line(aes(color = Group), linewidth = 0.7) +
-  labs(x = TeX("Distance from interface centroid (Å)"),
-       y = TeX("$\\Delta$ Frequency"),
+  labs(x = "Distance from interface centroid (Å)",
+       y = "Δ Frequency",
        color = NULL, fill = NULL) +
   scale_x_continuous(breaks = 1:Nsteps, labels = x_labels) +
   scale_color_manual(values = colors_delta, labels = labels_delta) +
   scale_fill_manual(values = colors_delta, labels = labels_delta) +
   tema_pub +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        panel.grid = element_blank())
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)
+        #,panel.grid = element_blank()
+        )
 
 print(p_delta_rings)
 
@@ -394,3 +395,309 @@ p_size_pdf <- ggplot(size_long, aes(x = n_aa, fill = Patch, color = Patch)) +
   tema_pub
 
 print(p_size_pdf)
+
+
+
+#########################################################################################
+#########################################################################################
+#########################################################################################
+
+base_results_dir <- "/Users/lorenzosisti/TiNDER/data/cdr_frequencies/"
+dir.create(base_results_dir, showWarnings = FALSE, recursive = TRUE)
+
+### CDRs ###
+cdrs <- c("h1", "h2", "h3", "l1", "l2", "l3")
+
+all_pdbs <- list.files(pdb_dir, pattern = "\\.pdb$",
+                       recursive = TRUE, full.names = TRUE)
+
+
+################################################################################
+### Process a single PDB file
+################################################################################
+
+gen_df_cdr_frequencies <- function(pdb_path,
+                                   representation = "sc_centroid") {
+  
+  file_name <- basename(pdb_path)
+  
+  tryCatch({
+    
+    pdb_aus <- read.pdb(pdb_path)
+    
+    renumbered_df <- renumber_ab_chains(
+      pdb_aus,
+      pdb_path,
+      log_file = file.path(base_results_dir, "errors.log"),
+      representation = representation
+    )
+    
+    if (!renumbered_df$ok) {
+      return(list(ok = FALSE, filename = file_name,
+                  error = renumbered_df$error))
+    }
+    
+    # One observation per residue, not per atom
+    dt_residues <- as.data.table(
+      renumbered_df$df_coord_renumbered
+    )[, .(chain, resno, resid, region)] |>
+      unique()
+    
+    # Keep the six CDRs; exclude framework and antigen
+    dt_cdr <- dt_residues[
+      region %in% cdrs &
+        chain %in% c("H", "L") &
+        resid %in% amino_acids
+    ]
+    
+    # Count all 20 amino acids separately for each CDR
+    cdr_counts <- lapply(cdrs, function(cdr) {
+      
+      aa_counts <- table(
+        factor(
+          dt_cdr[region == cdr, resid],
+          levels = amino_acids
+        )
+      )
+      
+      setNames(as.numeric(aa_counts), amino_acids)
+    })
+    
+    names(cdr_counts) <- cdrs
+    
+    return(list(
+      ok = TRUE,
+      filename = file_name,
+      cdr_counts = cdr_counts
+    ))
+    
+  }, error = function(e) {
+    
+    return(list(
+      ok = FALSE,
+      filename = file_name,
+      path = pdb_path,
+      error = e$message
+    ))
+    
+  })
+}
+
+
+################################################################################
+### MAIN: process all PDB files in parallel
+################################################################################
+
+with_progress({
+  
+  results_list <- future_map(
+    all_pdbs,
+    gen_df_cdr_frequencies,
+    representation = "sc_centroid",
+    .options = furrr_options(seed = TRUE),
+    .progress = TRUE
+  )
+  
+})
+
+
+################################################################################
+### Valid results and failed files
+################################################################################
+
+valid_results <- keep(results_list, ~ .x$ok)
+
+failed_results <- discard(results_list, ~ .x$ok)
+
+failed_files <- map_chr(failed_results, "filename")
+
+cat("PDB validi:", length(valid_results), "\n")
+cat("File falliti:", length(failed_files), "\n")
+
+if (length(failed_files) > 0) {
+  
+  writeLines(
+    failed_files,
+    file.path(base_results_dir, "failed_files.txt")
+  )
+}
+
+if (length(valid_results) == 0) {
+  stop("Nessun PDB valido: impossibile calcolare le frequenze.")
+}
+
+
+################################################################################
+### Sum residue counts over all PDBs, separately for each CDR
+################################################################################
+
+residue_counts_cdr <- lapply(cdrs, function(cdr) {
+  
+  Reduce(
+    `+`,
+    map(valid_results, ~ .x$cdr_counts[[cdr]])
+  )
+  
+})
+
+names(residue_counts_cdr) <- cdrs
+
+
+################################################################################
+### Save raw counts
+################################################################################
+
+saveRDS(
+  residue_counts_cdr,
+  file.path(base_results_dir, "residue_counts_cdr.rds")
+)
+
+for (cdr in cdrs) {
+  
+  write.csv(
+    data.frame(
+      AminoAcid = amino_acids,
+      Count = residue_counts_cdr[[cdr]]
+    ),
+    file = file.path(
+      base_results_dir,
+      paste0("residue_counts_", cdr, ".csv")
+    ),
+    row.names = FALSE
+  )
+  
+}
+
+
+################################################################################
+### Load counts and calculate frequencies
+################################################################################
+
+residue_counts_cdr <- readRDS(
+  file.path(base_results_dir, "residue_counts_cdr.rds")
+)
+
+# The four groups cover all 20 amino acids
+groups <- list(
+  charged     = c("ARG", "LYS", "ASP", "GLU", "HIS"),
+  polar       = c("ASN", "GLN", "SER", "THR"),
+  hydrophobic = c("PRO", "GLY", "ALA", "MET", "CYS",
+                  "LEU", "VAL", "ILE"),
+  aromatic    = c("TYR", "TRP", "PHE")
+)
+
+### Frequencies for each CDR
+
+combined_freq <- lapply(cdrs, function(cdr) {
+  
+  counts <- residue_counts_cdr[[cdr]]
+  
+  # If the CDR has no residues, frequencies are all zero
+  freq <- if (sum(counts) > 0) {
+    counts / sum(counts)
+  } else {
+    counts
+  }
+  
+  write.csv(
+    data.frame(AminoAcid = amino_acids, Frequency = freq),
+    file = file.path(
+      base_results_dir,
+      paste0("combined_freq_", cdr, ".csv")
+    ),
+    row.names = FALSE
+  )
+  
+  freq
+  
+})
+
+names(combined_freq) <- cdrs
+
+
+################################################################################
+### Group frequencies: rows = groups, columns = CDRs
+################################################################################
+
+group_freq_matrix <- sapply(combined_freq, function(freq_vec) {
+  
+  sapply(groups, function(g) sum(freq_vec[g]))
+  
+})
+
+colnames(group_freq_matrix) <- toupper(cdrs)
+
+print(group_freq_matrix)
+
+# Each non-empty CDR should sum to 1
+print(colSums(group_freq_matrix))
+
+write.csv(
+  group_freq_matrix,
+  file = file.path(base_results_dir, "group_freq_matrix.csv"),
+  row.names = TRUE
+)
+
+
+################################################################################
+### Heatmap: amino acid groups x CDRs
+################################################################################
+
+labels_groups_plain <- c(
+  charged = "Charged",
+  polar = "Polar",
+  hydrophobic = "Hydrophobic",
+  aromatic = "Aromatic"
+)
+
+freq_long <- as.data.frame(group_freq_matrix) |>
+  tibble::rownames_to_column("Group") |>
+  tidyr::pivot_longer(
+    -Group,
+    names_to = "CDR",
+    values_to = "Frequency"
+  ) |>
+  dplyr::mutate(
+    CDR = factor(CDR, levels = toupper(cdrs)),
+    Group = factor(Group, levels = rev(names(groups)))
+  )
+
+tema_pub <- theme_minimal() +
+  theme(
+    legend.position = "top",
+    panel.grid.minor = element_blank()
+  )
+
+p_group_heatmap <- ggplot(
+  freq_long,
+  aes(x = CDR, y = Group, fill = Frequency)
+) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  labs(
+    x = "CDR",
+    y = NULL,
+    fill = "Frequency"
+  ) +
+  scale_y_discrete(labels = labels_groups_plain) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    direction = -1,
+    limits = c(0, 1)
+  ) +
+  tema_pub +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    axis.text.y = element_text(hjust = 0),
+    panel.grid = element_blank()
+  )
+
+print(p_group_heatmap)
+
+ggsave(
+  filename = file.path(base_results_dir, "cdr_group_heatmap.png"),
+  plot = p_group_heatmap,
+  width = 7,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)

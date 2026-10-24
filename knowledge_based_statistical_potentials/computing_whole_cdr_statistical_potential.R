@@ -12,86 +12,86 @@
 ### DECOMMENT FOR BATCH EXECUTION
 #########################################################################################
 
-### Required libraries
-pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
-source("/Users/lorenzosisti/TiNDER/functions.R")
-
-### Command-line input
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2) stop("Usage: Rscript potential_cdr.R <pdb_list.txt> <out_dir> [n_workers]")
-list_file        <- args[1]
-base_results_dir <- args[2]
-n_workers        <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
-
-dir.create(base_results_dir, recursive = TRUE, showWarnings = FALSE)
-
-if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
-handlers(global = TRUE)
-handlers("progress")          # "rstudio" doesn't work from a terminal
-
-S <- 0.02
-
-### Parameters per representation (only sc_centroid)
-REPR_PARAMS <- list(
-  sc_centroid = list(cutoff = 8.5)
-  # ca          = list(cutoff = 12.0),
-  # all_atom    = list(cutoff = 6.0)
-)
-REPR_LABELS <- c(sc_centroid = "SC-CG")  # ca = "C-alpha-CG", all_atom = "All-atom"
-
-# Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
-amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
-                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
-
-all_pdbs <- readLines(list_file)
+# ### Required libraries
+# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+# source("/Users/lorenzosisti/TiNDER/functions.R")
+# 
+# ### Command-line input
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 2) stop("Usage: Rscript potential_cdr.R <pdb_list.txt> <out_dir> [n_workers]")
+# list_file        <- args[1]
+# base_results_dir <- args[2]
+# n_workers        <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
+# 
+# dir.create(base_results_dir, recursive = TRUE, showWarnings = FALSE)
+# 
+# if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
+# handlers(global = TRUE)
+# handlers("progress")          # "rstudio" doesn't work from a terminal
+# 
+# S <- 0.02
+# 
+# ### Parameters per representation (only sc_centroid)
+# REPR_PARAMS <- list(
+#   sc_centroid = list(cutoff = 8.5)
+#   # ca          = list(cutoff = 12.0),
+#   # all_atom    = list(cutoff = 6.0)
+# )
+# REPR_LABELS <- c(sc_centroid = "SC-CG")  # ca = "C-alpha-CG", all_atom = "All-atom"
+# 
+# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+# amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+#                  "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
+# 
+# all_pdbs <- readLines(list_file)
 
 #########################################################################################
 ### DECOMMENT FOR INTERACTIVE EXECUTION
 #########################################################################################
 
-# ### Required libraries
-# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
-# 
-# # Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
-# source("/Users/lorenzosisti/TiNDER/functions.R")
-# 
-# ### Set up parallelization to speed up computation
-# plan(multisession, workers = parallel::detectCores() - 1)
-# handlers(global = TRUE)
-# handlers("rstudio")
-# 
-# ### Define directories and global parameters
-# pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-# base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/"
-# dir.create(base_results_dir, showWarnings = FALSE)
-# 
-# S <- 0.02
-# 
-# ### Parameters per representation
-# REPR_PARAMS <- list(
-#   sc_centroid = list(cutoff = 8.5),
-#   ca          = list(cutoff = 12.0),   
-#   all_atom    = list(cutoff = 6.0)
-# )
-# 
-# ### Labels used in plot titles
-# REPR_LABELS <- c(
-#   sc_centroid = "SC-CG",
-#   ca          = "C-alpha-CG",
-#   all_atom    = "All-atom"
-# )
-# 
-# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
-# amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
-#                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
-# 
-# set.seed(1234)
-# 
-# all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+### Required libraries
+pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
 
-# pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" # Just for single-path testing 
+# Define the path to a custom function files (required for avoiding redundant numbering in chain and not only...)
+source("/Users/lorenzosisti/TiNDER/functions.R")
+
+### Set up parallelization to speed up computation
+plan(multisession, workers = parallel::detectCores() - 1)
+handlers(global = TRUE)
+handlers("rstudio")
+
+### Define directories and global parameters
+pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_24_10/"
+dir.create(base_results_dir, showWarnings = FALSE)
+
+S <- 0.02
+
+### Parameters per representation
+REPR_PARAMS <- list(
+  sc_centroid = list(cutoff = 8.5),
+  ca          = list(cutoff = 12.0),
+  all_atom    = list(cutoff = 6.0)
+)
+
+### Labels used in plot titles
+REPR_LABELS <- c(
+  sc_centroid = "SC-CG",
+  ca          = "C-alpha-CG",
+  all_atom    = "All-atom"
+)
+
+# Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
+
+set.seed(1234)
+
+all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" # Just for single-path testing
 
 #########################################################################################
 #########################################################################################
@@ -451,7 +451,7 @@ for (repr in names(REPR_PARAMS)) {
     }
     
     # Reshape: rows = pair_key, columns = part, values = potential
-    wide_dt <- dcast(dt, pair_key ~ part, value.var = "potential")
+    wide_dt <- data.table::dcast(dt, pair_key ~ part, value.var = "potential")
     mat_for_cor <- as.matrix(wide_dt[, -1, with = FALSE])
     rownames(mat_for_cor) <- wide_dt$pair_key
     
@@ -459,16 +459,35 @@ for (repr in names(REPR_PARAMS)) {
     cor(mat_for_cor[, part_order], method = "pearson", use = "pairwise.complete.obs")
   }
   
-  plot_correlation_heatmap <- function(cor_matrix, title, file_name, save_dir = results_dir) {
+  plot_correlation_heatmap <- function(cor_matrix, title, file_name, save_dir = results_dir,
+                                       lim_min = 0, lim_max = 1) {
+    # Uppercase axis labels: h1 -> H1, all -> ALL
+    rownames(cor_matrix) <- toupper(rownames(cor_matrix))
+    colnames(cor_matrix) <- toupper(colnames(cor_matrix))
+    
     p <- pheatmap(cor_matrix,
                   color = viridisLite::plasma(50, direction = -1),
-                  breaks = seq(-1, 1, length.out = 51),
+                  breaks = seq(lim_min, lim_max, length.out = 51),
                   display_numbers = TRUE,
                   number_format = "%.2f",
+                  number_color = "black",     # numbers in black
+                  fontsize_number = 11,
+                  angle_col = 0,              # horizontal column labels
                   cluster_rows = FALSE,
                   cluster_cols = FALSE,
                   main = title,
                   silent = TRUE)
+    
+    # Bold numbers: pheatmap has no argument for it, so edit the gtable
+    idx <- which(sapply(p$gtable$grobs, function(g) inherits(g, "text") &&
+                          !is.null(g$name) && grepl("^matrix", g$name)))
+    for (i in idx) {
+      p$gtable$grobs[[i]]$gp <- grid::gpar(
+        fontface = "bold", col = "black",
+        fontsize = p$gtable$grobs[[i]]$gp$fontsize
+      )
+    }
+    
     ggsave(filename = file.path(save_dir, file_name),
            plot = as.ggplot(p$gtable), width = 7, height = 6, dpi = 300, bg = "white")
   }

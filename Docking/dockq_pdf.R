@@ -75,7 +75,7 @@ comp_af3 <- ggplot(df_summary, aes(x = Categoria, y = Frazione)) +
   
   theme_minimal() +
   theme(
-    panel.grid = element_blank(),
+    #panel.grid = element_blank(),
     # <--- Modifica qui sotto per le scritte sotto le barre
     axis.text.x = element_text(size = 12, color = "black"),
     # Opzionale: ingrandisce anche il titolo dell'asse Y per coerenza
