@@ -93,17 +93,231 @@ fviz_dend(hierarchical_partitioning_pearson, show_labels = FALSE)
 # Cophenetic correlation for Pearson-based clustering
 cor(get_dist(scaled_data, method = "pearson"), cophenetic(hierarchical_partitioning_pearson))
 
+
 #------------------------------------------
 # BETWEEN-DESCRIPTORS CORRELATION ANALYSIS
 #------------------------------------------
 
-# Compute correlation matrix between descriptors
-cor_matrix <- cor(descriptor_matrix, use = "pairwise.complete.obs")
-print(cor_matrix)
+library(viridis)
 
-my_col <- colorRampPalette(c("gold1", "white", "dodgerblue2"))(200) # Custom color palette: gold1 → white → dodgerblue2
-corrplot(cor_matrix, col = my_col, tl.pos = "n") 
-mtext("Interface descriptors correlation matrix", side = 3, line = 3, col = "black", cex = 1.3, font = 2) # Set title
+# 1. Define the desired order of descriptors
+
+size_descriptors <- c(
+  "antigen_length",
+  "interface_radius",
+  "paratope_aa_number",
+  "epitope_aa_number",
+  "interface_gyration_radius",
+  "sc_int_area"
+)
+
+physicochemical_descriptors <- c(
+  "avg_interface_Hr",
+  "sc",
+  "ec_avg"
+)
+
+topological_descriptors <- c(
+  "betweenness_centrality",
+  "closeness_centrality",
+  "shortest_path",
+  "degree",
+  "clustering_coefficient",
+  "density",
+  "modularity",
+  "graph_energy",
+  "graph_energy_of_complexes"
+)
+
+descriptor_order <- c(
+  size_descriptors,
+  physicochemical_descriptors,
+  topological_descriptors
+)
+
+# 2. Reorder descriptors and calculate the correlation matrix
+
+ordered_descriptors <- descriptor_matrix[
+  , descriptor_order, drop = FALSE
+]
+
+cor_matrix <- cor(
+  ordered_descriptors,
+  use = "pairwise.complete.obs",
+  method = "pearson"
+)
+
+# 3. Create a numbered correspondence table
+
+descriptor_labels <- data.frame(
+  Number = seq_along(descriptor_order),
+  Category = c(
+    rep("Size", length(size_descriptors)),
+    rep("Physicochemical",
+        length(physicochemical_descriptors)),
+    rep("Topological", length(topological_descriptors))
+  ),
+  Descriptor = descriptor_order
+)
+
+print(descriptor_labels, row.names = FALSE)
+
+# 4. Replace axis labels with numbers from 1 to 18
+
+dimnames(cor_matrix) <- list(
+  as.character(seq_len(ncol(cor_matrix))),
+  as.character(seq_len(ncol(cor_matrix)))
+)
+
+# 5. Create a reversed Plasma palette
+#    High positive correlations (+1) = purple
+
+
+# Plasma palette, with purple for high positive correlations
+plasma_col <- colorRampPalette(
+  viridis::plasma(256, direction = -1)
+)(200)
+
+# Increase transparency: alpha = 0.65
+plasma_transparent <- grDevices::adjustcolor(
+  plasma_col,
+  alpha.f = 0.75
+)
+
+corrplot(
+  cor_matrix,
+  method = "color",
+  type = "lower",
+  order = "original",
+  col = plasma_transparent,
+  col.lim = c(-1, 1),
+  
+  # Color scale
+  cl.pos = "b",
+  cl.length = 5,
+  cl.ratio = 0.15,
+  cl.cex = 0.8,
+  
+  # Labels
+  tl.pos = "l",
+  tl.col = "black",
+  tl.cex = 0.9,
+  tl.srt = 0,
+  
+  # Appearance
+  addgrid.col = "white",
+  diag = TRUE,
+  mar = c(1, 5, 3, 1)
+)
+
+
+install.packages(c("igraph", "ggraph", "ggplot2", "dplyr"))
+
+library(igraph)
+library(ggraph)
+library(ggplot2)
+library(dplyr)
+
+
+#------------------------------------------
+# CIRCULAR NETWORK OF DESCRIPTOR CORRELATIONS
+#------------------------------------------
+
+# 1. Define the correlation threshold
+cor_threshold <- 0.50
+
+# 2. Define nodes and categories
+nodes <- descriptor_labels %>%
+  mutate(
+    name = as.character(Number),
+    Category = factor(
+      Category,
+      levels = c("Size", "Physicochemical", "Topological")
+    )
+  )
+
+# 3. Extract unique pairs of descriptors
+#    Exclude the diagonal and retain strong correlations
+
+cor_df <- as.data.frame(as.table(cor_matrix))
+colnames(cor_df) <- c("from", "to", "correlation")
+
+edges <- cor_df %>%
+  mutate(
+    from = as.character(from),
+    to = as.character(to)
+  ) %>%
+  filter(
+    as.integer(from) < as.integer(to),
+    abs(correlation) >= cor_threshold
+  ) %>%
+  mutate(
+    sign = ifelse(correlation > 0, "Positive", "Negative"),
+    strength = abs(correlation)
+  )
+
+# 4. Build the undirected network
+g <- graph_from_data_frame(
+  edges,
+  directed = FALSE,
+  vertices = nodes
+)
+
+# 5. Plot the circular graph
+set.seed(1234)
+
+ggraph(g, layout = "circle") +
+  geom_edge_link(
+    aes(
+      edge_colour = sign,
+      edge_width = strength
+    ),
+    alpha = 0.65,
+    show.legend = TRUE
+  ) +
+  geom_node_point(
+    aes(shape = Category),
+    size = 7,
+    color = "black",
+    fill = "black",
+    stroke = 1
+  ) +
+  scale_shape_manual(
+    name = "Descriptor category",
+    values = c(
+      "Size" = 21,             # Circle
+      "Physicochemical" = 22,  # Square
+      "Topological" = 24       # Triangle
+    ),
+    breaks = c("Size", "Physicochemical", "Topological")
+  ) +
+  geom_node_text(
+    aes(label = name),
+    size = 3,
+    color = "white",
+    fontface = "bold"
+  ) +
+  scale_edge_colour_manual(
+    name = "Correlation sign",
+    values = c(
+      "Positive" = "#7B3294",
+      "Negative" = "#E58B55"
+    )
+  ) +
+  scale_edge_width(
+    name = "|Correlation|",
+    range = c(0.3, 2)
+  ) +
+  coord_fixed() +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(
+      hjust = 0.5,
+      face = "bold",
+      size = 14
+    ))
+
 
 #------------------------------------------
 # PCA AND CLUSTER ANALYSIS ON PRINCIPAL COMPONENTS
@@ -112,8 +326,26 @@ mtext("Interface descriptors correlation matrix", side = 3, line = 3, col = "bla
 data_pca <- princomp(scaled_data)
 summary(data_pca)
 
-fviz_eig(data_pca, addlabels = FALSE, ncp = 18, geom = "bar") # Scree plot (eigenvalues)
+fviz_eig(
+  data_pca,
+  addlabels = FALSE,
+  ncp = 18,
+  geom = "bar",
+  barfill = "#CC4678FF",
+  barcolor = "#CC4678FF"
+) +
+  labs(title = NULL)
 reduced_data <- data_pca$scores[, 1:5] # Keep first 5 principal components
+
+ggplot(as.data.frame(reduced_data),
+       aes(x = Comp.1, y = Comp.2)) +
+  geom_point(color = "#CC4678", alpha = 0.6, size = 2) +
+  labs(
+    title = NULL,
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_minimal()
 
 # Re-assess clustering tendency on PCA-reduced data
 hopkins(reduced_data, m = ceiling(nrow(scaled_data)/10)) # Statistichal method

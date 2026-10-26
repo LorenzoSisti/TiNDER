@@ -97,6 +97,10 @@ all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names 
 #########################################################################################
 #########################################################################################
 
+plasma_transparent <- grDevices::adjustcolor(
+  viridisLite::plasma(50, direction = -1), alpha.f = 0.75
+)
+
 ### Generate a contacts dataframe 
 ### N.B. This function relies on the renumber_ab_chains() function (see functions.R)
 gen_df_contacts <- function(pdb_path, representation = "sc_centroid") {
@@ -466,7 +470,7 @@ for (repr in names(REPR_PARAMS)) {
     colnames(cor_matrix) <- toupper(colnames(cor_matrix))
     
     p <- pheatmap(cor_matrix,
-                  color = viridisLite::plasma(50, direction = -1),
+                  color = plasma_transparent,
                   breaks = seq(lim_min, lim_max, length.out = 51),
                   display_numbers = TRUE,
                   number_format = "%.2f",
