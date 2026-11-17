@@ -116,24 +116,13 @@ score_docking_pose_cdr <- function(pdb_path) {
     if (!renumbered_df$ok) return(NULL)
     
     # 3. Calcolo Centroidi via data.table
-    dt_coord <- as.data.table(renumbered_df$df_coord_renumbered)
-    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)), by = .(chain, resno, resid)]
+    dt_coord     <- as.data.table(renumbered_df$df_coord_renumbered)
+    dt_centroids <- dt_coord[, .(x = mean(x), y = mean(y), z = mean(z)),
+                             by = .(chain, resno, resid, region)]
     
-    # 4. Mappatura CDR tramite fcase() sui residui dell'anticorpo
-    dt_ab <- dt_centroids[chain %in% chain_HL] # seleziono solo le catene anticorpali
-    dt_ab[, cdr := fcase(
-      chain == chain_H & resno %in% 26:32, "h1",
-      chain == chain_H & resno %in% 52:56, "h2",
-      chain == chain_H & resno %in% 95:102, "h3",
-      chain == chain_L & resno %in% 24:34, "l1",
-      chain == chain_L & resno %in% 50:56, "l2",
-      chain == chain_L & resno %in% 89:97, "l3",
-      default = NA_character_
-    )] # seleziono solo i CDR
-    
-    # Teniamo SOLO i residui dell'anticorpo che fanno parte di una CDR
-    dt_ab_cdr <- dt_ab[!is.na(cdr)]
-    dt_ag <- dt_centroids[!chain %in% chain_HL]
+    dt_ab_cdr <- dt_centroids[chain %in% chain_HL & region %in% cdr_parts]
+    dt_ab_cdr[, cdr := region]
+    dt_ag     <- dt_centroids[!chain %in% chain_HL]
     
     if (nrow(dt_ab_cdr) == 0 | nrow(dt_ag) == 0) return(NULL)
     

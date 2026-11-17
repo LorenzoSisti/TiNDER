@@ -27,7 +27,7 @@ handlers("rstudio")
 
 ### Setting paths, directories and global variables ###
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-results_dir <- "/Users/lorenzosisti/TiNDER/data/interface_statistics_fig_2/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/interface_statistics_fig_2_7_11/"
 dir.create(results_dir, showWarnings = FALSE)
 
 DistCutoff <- 8.5  # Two residues are "in contact" if the centroids of their side chains are at less than 8.5 Angstrom
@@ -251,23 +251,30 @@ p_group_bars <- ggplot(freq_long, aes(x = Step, y = Frequency, fill = Group)) +
 print(p_group_bars)
 
 ### Heatmap: amino acid groups (rows) x rings (columns), plasma palette ###
-labels_groups_plain <- c("charged" = "Charged", "polar" = "Polar",
-                         "hydrophobic" = "Hydrophobic", "aromatic" = "Aromatic")
+labels_groups_plain <- c("charged" = "C", "polar" = "P",
+                         "hydrophobic" = "H", "aromatic" = "A")
 
 p_group_heatmap <- ggplot(freq_long, aes(x = Step,
                                          y = factor(Group, levels = rev(names(groups))),
                                          fill = Frequency)) +
   geom_tile(color = "white", linewidth = 0.5) +
-  labs(x = TeX("Distance from interface centroid (Å)"),
+  labs(x = TeX("Distance from centroid (Å)"),
        y = NULL,
-       fill = "Frequency") +
+       fill = NULL) +
   scale_x_discrete(labels = x_labels) +
   scale_y_discrete(labels = labels_groups_plain) +
-  scale_fill_viridis_c(option = "plasma", direction = -1) +
+  scale_fill_gradientn(
+    colors = c("#F0E1F7", "#C58BE0", "darkorchid", "#4B0F6B"),
+    values = scales::rescale(quantile(freq_long$Frequency, c(0, 0.25, 0.6, 1))),
+    limits = range(freq_long$Frequency)
+  ) +
   tema_pub +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         axis.text.y = element_text(hjust = 0),
-        panel.grid = element_blank())
+        panel.grid = element_blank(),
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.text  = element_text(size = 12))
 
 print(p_group_heatmap)
 
@@ -278,21 +285,25 @@ delta_long <- as.data.frame(t(group_freq_matrix[c("charged", "hydrophobic"), ]))
          hydrophobic_delta = hydrophobic - min(hydrophobic)) %>%
   pivot_longer(c(charged_delta, hydrophobic_delta), names_to = "Group", values_to = "Value")
 
-colors_delta <- c("charged_delta" = "purple", "hydrophobic_delta" = "#CC4678FF")
+colors_delta <- c("charged_delta" = "darkorange", "hydrophobic_delta" = "darkorchid")
 labels_delta <- c("charged_delta" = "Charged residues",
                   "hydrophobic_delta" = "Hydrophobic residues")
 
 p_delta_rings <- ggplot(delta_long, aes(x = Step, y = Value, fill = Group)) +
   geom_area(position = "identity", alpha = 0.3, color = NA) +
   geom_line(aes(color = Group), linewidth = 0.7) +
-  labs(x = "Distance from interface centroid (Å)",
+  labs(x = "Distance from centroid (Å)",
        y = "Δ Frequency",
        color = NULL, fill = NULL) +
   scale_x_continuous(breaks = 1:Nsteps, labels = x_labels) +
   scale_color_manual(values = colors_delta, labels = labels_delta) +
   scale_fill_manual(values = colors_delta, labels = labels_delta) +
   tema_pub +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.text  = element_text(size = 12)
+        #legend.key.size = unit(1, "cm")
         #,panel.grid = element_blank()
         )
 
@@ -346,23 +357,28 @@ p_delta_aa <- ggplot(delta_plot_df) +
   geom_text(aes(x = x, y = 0, label = letter), fontface = "bold", size = 4.5) +
   labs(
     x = NULL,
-    y = TeX("$\\Delta$ Frequency (Paratope - Epitope)"),
-    title = TeX("Composition difference at the Paratope-Epitope interface"),
+    y = TeX("$\\Delta$ Frequency"),
+    #title = TeX("Composition difference at the Paratope-Epitope interface"),
     fill = NULL, color = NULL
   ) +
   scale_x_continuous(breaks = NULL) +
   scale_y_continuous(breaks = y_breaks_pos, labels = y_breaks_true) +
   scale_fill_manual(
-    values = c("Paratope" = "#CC4678FF", "Epitope" = "purple"),
+    values = c("Paratope" = "darkorchid", "Epitope" = "darkorange"),
     labels = c("Paratope" = "Paratope-enriched amino acids", "Epitope" = "Epitope-enriched amino acids")
   ) +
   scale_color_manual(
-    values = c("Paratope" = "#CC4678FF", "Epitope" = "purple"),
+    values = c("Paratope" = "darkorchid", "Epitope" = "darkorange"),
     labels = c("Paratope" = "Paratope-enriched amino acids", "Epitope" = "Epitope-enriched amino acids")
   ) +
   tema_pub +
   theme(panel.grid.major.x = element_blank(),
-        plot.title = element_text(hjust = 0.5))
+        plot.title = element_text(hjust = 0.5),
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.text  = element_text(size = 12)
+        #legend.key.size = unit(1, "cm")
+        )
 
 print(p_delta_aa)
 
@@ -380,19 +396,26 @@ size_long <- descriptors %>%
   select(paratope_aa_number, epitope_aa_number) %>%
   pivot_longer(everything(), names_to = "Patch", values_to = "n_aa")
 
-colors_patch <- c("paratope_aa_number" = "#CC4678FF", "epitope_aa_number" = "purple")
+colors_patch <- c("paratope_aa_number" = "darkorchid", "epitope_aa_number" = "darkorange")
 labels_patch <- c("paratope_aa_number" = "Paratope", "epitope_aa_number" = "Epitope")
 
 p_size_pdf <- ggplot(size_long, aes(x = n_aa, fill = Patch, color = Patch)) +
   geom_density(alpha = 0.4, linewidth = 0.8) +
   labs(
-    x = "Number of amino acids in the interface patch",
-    y = "Probability Density Function (PDF)",
+    x = "Amino acids number",
+    y = "Probability Density Function",
     fill = NULL, color = NULL
   ) +
   scale_fill_manual(values = colors_patch, labels = labels_patch) +
   scale_color_manual(values = colors_patch, labels = labels_patch) +
-  tema_pub
+  tema_pub +
+  theme(panel.grid.major.x = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        legend.text  = element_text(size = 12)
+        #legend.key.size = unit(1, "cm")
+  )
 
 print(p_size_pdf)
 
@@ -644,10 +667,10 @@ write.csv(
 ################################################################################
 
 labels_groups_plain <- c(
-  charged = "Charged",
-  polar = "Polar",
-  hydrophobic = "Hydrophobic",
-  aromatic = "Aromatic"
+  charged = "C",
+  polar = "P",
+  hydrophobic = "H",
+  aromatic = "A"
 )
 
 freq_long <- as.data.frame(group_freq_matrix) |>
@@ -676,19 +699,22 @@ p_group_heatmap <- ggplot(
   labs(
     x = "CDR",
     y = NULL,
-    fill = "Frequency"
+    fill = NULL
   ) +
   scale_y_discrete(labels = labels_groups_plain) +
-  scale_fill_viridis_c(
-    option = "plasma",
-    direction = -1,
-    limits = c(0, 1)
+  scale_fill_gradientn(
+    colors = c("#F0E1F7", "#C58BE0", "darkorchid", "#4B0F6B"),
+    values = scales::rescale(quantile(freq_long$Frequency, c(0, 0.25, 0.6, 1))),
+    limits = range(freq_long$Frequency)
   ) +
   tema_pub +
   theme(
     axis.text.x = element_text(angle = 0, hjust = 0.5),
     axis.text.y = element_text(hjust = 0),
-    panel.grid = element_blank()
+    panel.grid = element_blank(),
+    axis.text  = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.text  = element_text(size = 12)
   )
 
 print(p_group_heatmap)

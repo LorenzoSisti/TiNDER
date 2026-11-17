@@ -9,7 +9,7 @@ library(viridisLite)
 
 # --- 2. IMPOSTAZIONI GLOBALI ---
 # !!! MODIFICA QUESTO PATH !!!
-output_dir <- "/Users/lorenzosisti/TiNDER/data/roc_auc_near_vs_all_mean_pmf"
+output_dir <- "/Users/lorenzosisti/TiNDER/data/scores_new_paper/roc_af2"
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 plot_width <- 7
 plot_height <- 5
@@ -17,21 +17,32 @@ plot_dpi <- 300
 theme_custom <- theme_minimal() +
   theme(plot.title = element_blank())
 
-path_dockq_af3 = "/Users/lorenzosisti/TiNDER/data/dockq_af3.csv"
-path_pot_af3_whole = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/whole_interface_score.csv"
-path_pot_af3_strat = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/layer_score.csv"
-path_pot_af3_cdr = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/cdr_score.csv"
+# path_dockq_af3 = "/Users/lorenzosisti/TiNDER/data/dockq_af3.csv"
+# path_pot_af3_whole = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/whole_interface_score.csv"
+# path_pot_af3_strat = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/layer_score.csv"
+# path_pot_af3_cdr = "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/cdr_score.csv"
+
+path_dockq_af3 = "/Users/lorenzosisti/Downloads/results.csv"
+path_pot_af3_whole = "/Users/lorenzosisti/TiNDER/data/scores_new_paper/af2/whole_interface_score.csv"
+path_pot_af3_strat = "/Users/lorenzosisti/TiNDER/data/scores_new_paper/af2/layer_score.csv"
 
 dockq_scores <- read.csv(path_dockq_af3)
 whole_potential_scores <- read.csv(path_pot_af3_whole)
 stratified_potential_scores <- read.csv(path_pot_af3_strat)
-cdr_potentials_scores <- read.csv(path_pot_af3_cdr)
+#cdr_potentials_scores <- read.csv(path_pot_af3_cdr)
+
+whole_potential_scores <- whole_potential_scores %>%
+  mutate(model_id = sub("\\.pdb$", "", pdb)) %>%
+  select(-pdb)
+
+whole_merged_df <- dockq_scores %>%
+  left_join(whole_potential_scores, by = "model_id")
 
 # --- 3. CALCOLO DELLE 6 ROC (ogni oggetto ha ora un nome distinto) ---
 
-## --- WHOLE ---
-whole_merged_df <- dockq_scores %>%
-  left_join(whole_potential_scores, by = c("Model" = "pdb"))
+# ## --- WHOLE ---
+# whole_merged_df <- dockq_scores %>%
+#   left_join(whole_potential_scores, by = c("Model" = "pdb"))
 df_roc_whole <- whole_merged_df
 df_roc_whole$true_class <- ifelse(df_roc_whole$DockQ <= 0.81, 1, 0)
 
@@ -41,8 +52,17 @@ roc_whole_asym <- roc(df_roc_whole$true_class, df_roc_whole$mean_asym)
 print(roc_whole_asym)
 
 ## --- STRATIFIED ---
+
+# strat_merged_df <- dockq_scores %>%
+#   left_join(stratified_potential_scores, by = c("Model" = "pdb"))
+
+stratified_potential_scores <- stratified_potential_scores %>%
+  mutate(model_id = sub("\\.pdb$", "", pdb)) %>%
+  select(-pdb)
+
 strat_merged_df <- dockq_scores %>%
-  left_join(stratified_potential_scores, by = c("Model" = "pdb"))
+  left_join(stratified_potential_scores, by = "model_id")
+
 df_roc_strat <- strat_merged_df
 df_roc_strat$true_class <- ifelse(df_roc_strat$DockQ <= 0.81, 1, 0)
 
@@ -51,16 +71,16 @@ print(roc_strat_sym)
 roc_strat_asym <- roc(df_roc_strat$true_class, df_roc_strat$mean_asym)
 print(roc_strat_asym)
 
-## --- CDR ---
-cdr_merged_df <- dockq_scores %>%
-  left_join(cdr_potentials_scores, by = c("Model" = "pdb_filename"))
-df_roc_cdr <- cdr_merged_df
-df_roc_cdr$true_class <- ifelse(df_roc_cdr$DockQ <= 0.81, 1, 0)
-
-roc_cdr_sym <- roc(df_roc_cdr$true_class, df_roc_cdr$mean_sym)
-print(roc_cdr_sym)
-roc_cdr_asym <- roc(df_roc_cdr$true_class, df_roc_cdr$mean_asym)
-print(roc_cdr_asym)
+# ## --- CDR ---
+# cdr_merged_df <- dockq_scores %>%
+#   left_join(cdr_potentials_scores, by = c("Model" = "pdb_filename"))
+# df_roc_cdr <- cdr_merged_df
+# df_roc_cdr$true_class <- ifelse(df_roc_cdr$DockQ <= 0.81, 1, 0)
+# 
+# roc_cdr_sym <- roc(df_roc_cdr$true_class, df_roc_cdr$mean_sym)
+# print(roc_cdr_sym)
+# roc_cdr_asym <- roc(df_roc_cdr$true_class, df_roc_cdr$mean_asym)
+# print(roc_cdr_asym)
 
 # --- 4. PLOT COMBINATO DELLE 6 ROC NELLO STESSO GRAFICO ---
 
@@ -68,9 +88,9 @@ roc_list <- list(
   "Whole-interface - Sym"       = roc_whole_sym,
   "Whole-interface - Asym"      = roc_whole_asym,
   "Layer-based - Sym"  = roc_strat_sym,
-  "Layer-based - Asym" = roc_strat_asym,
-  "CDR-based - Sym"         = roc_cdr_sym,
-  "CDR-based - Asym"        = roc_cdr_asym
+  "Layer-based - Asym" = roc_strat_asym#,
+  #"CDR-based - Sym"         = roc_cdr_sym,
+  #"CDR-based - Asym"        = roc_cdr_asym
 )
 
 # Palette viridisLite: viola = AUC maggiore, giallo = AUC minore

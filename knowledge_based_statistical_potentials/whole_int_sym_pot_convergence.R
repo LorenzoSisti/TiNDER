@@ -296,19 +296,22 @@ write.csv(aggregati, file = file.path(results_dir, "aggregati_sym.csv"), row.nam
 # ---- Tema comune (sfondo bianco) ----
 tema_bianco <- theme_minimal() +
   theme(panel.background = element_rect(fill = "white", colour = NA),
-        plot.background = element_rect(fill = "white", colour = NA))
+        plot.background = element_rect(fill = "white", colour = NA),
+        axis.text  = element_text(size = 12),
+        axis.title = element_text(size = 14)
+  )
 
 # ---- Grafico di saturazione: media delle correlazioni +- sd media (barre verticali) ----
 plot_saturation <- ggplot(aggregati, aes(x = n_pdb, y = avg_mean)) +
-  geom_line(color = "#CC4678FF", linewidth = 1) +
-  geom_point(color = "#CC4678FF", size = 2) +
+  geom_line(color = "darkorchid", linewidth = 1) +
+  geom_point(color = "darkorchid", size = 2) +
   geom_errorbar(aes(ymin = avg_mean - avg_sd, ymax = avg_mean + avg_sd),
                 width = diff(range(aggregati$n_pdb)) * 0.01,
-                color = "#CC4678FF", alpha = 0.6) +
+                color = "darkorchid", alpha = 0.6) +
   geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
   labs(
-    x = TeX("Number of PDB files used to compute the statistical potentials"),
-    y = TeX("Average Pearson's $\\textit{r}$ between potential matrices ($\\pm \\sigma$)")
+    x = TeX("PDB files"),
+    y = TeX("Average correlation $\\pm$ SEM")
   ) +
   tema_bianco
 
@@ -319,26 +322,27 @@ ggsave(file.path(results_dir, "saturation_sym.png"),
 
 # ---- plot5: deviazione standard media in funzione del numero di PDB ----
 plot5 <- ggplot(aggregati, aes(x = n_pdb, y = avg_sd)) +
-  geom_line(color = "#CC4678FF", linewidth = 1) +
-  geom_point(color = "#CC4678FF", size = 2) +
+  geom_line(color = "darkorchid", linewidth = 1) +
+  geom_point(color = "darkorchid", size = 2) +
   labs(
-    x = TeX("Number of PDB files used to compute the statistical potentials"),
-    y = TeX("Average $\\sigma$ between potential matrices")
+    x = TeX("PDB files"),
+    y = TeX("Standard Error of Mean (SEM)")
   ) +
   tema_bianco
 
 print(plot5)
+
 
 ggsave(file.path(results_dir, "avg_sd_sym.png"),
        plot = plot5, width = 7, height = 5, dpi = 300, bg = "white")
 
 # ---- plot6: pendenza dei segmenti del grafico di saturazione ----
 plot6 <- ggplot(filter(aggregati, !is.na(slope)), aes(x = n_pdb, y = slope)) +
-  geom_line(color = "#CC4678FF", linewidth = 1) +
-  geom_point(color = "#CC4678FF", size = 2) +
+  geom_line(color = "darkorchid", linewidth = 1) +
+  geom_point(color = "darkorchid", size = 2) +
   labs(
-    x = TeX("Number of PDB files used to compute the statistical potentials"),
-    y = TeX("Slope of the segments in the convergence plot")
+    x = TeX("PDB files"),
+    y = TeX("Average correlation increase")
   ) +
   tema_bianco
 

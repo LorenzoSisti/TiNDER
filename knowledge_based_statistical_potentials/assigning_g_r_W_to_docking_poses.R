@@ -27,81 +27,32 @@
 ### DECOMMENT FOR BATCH EXECUTION
 #########################################################################################
 
-pacman::p_load(bio3d, dplyr, tidyr, future, furrr, data.table)
-source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
-
-### Command-line input
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2) stop("Usage: Rscript score_gr.R <pot_dir> <dockq_csv> [n_workers] [pdb_dir]")
-pot_dir     <- args[1]                       # folder containing ring_*_potential.csv
-dockq_file  <- args[2]
-n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
-pdb_dir     <- if (length(args) >= 4) args[4] else "/Users/lorenzosisti/TiNDER/data/docking_af3/"
-results_dir <- pot_dir                       # output goes next to the potentials
-
-if (file.exists(file.path(results_dir, "layer_score_dockq.csv"))) {
-  message("Already done: ", results_dir); quit(save = "no", status = 0)
-}
-
-if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
-
-DistCutoff <- 8.5
-Nsteps <- 3
-amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
-                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
-
-### Potentials of THIS group
-df_asym_long <- fread(file.path(pot_dir, "ring_asym_potential.csv"))
-df_sym_long  <- fread(file.path(pot_dir, "ring_sym_potential.csv"))
-
-# Lookup asimmetrico: chiave diretta resid_ab_resid_ag_ringpair
-df_asym_long[, lookup_key := paste(resid_ab, resid_ag, ring_pair, sep = "_")]
-setkey(df_asym_long, lookup_key)
-
-# Lookup simmetrico: la tabella ha solo resid_i <= resid_j -> va "specchiata"
-# per coprire entrambi gli ordinamenti aa1/aa2 osservati nei contatti
-df_sym_long_full <- rbindlist(list(
-  df_sym_long[, .(aa_i = resid_i, aa_j = resid_j, ring_pair, potential)],
-  df_sym_long[resid_i != resid_j, .(aa_i = resid_j, aa_j = resid_i, ring_pair, potential)]
-))
-df_sym_long_full[, lookup_key := paste(aa_i, aa_j, ring_pair, sep = "_")]
-setkey(df_sym_long_full, lookup_key)
-
-all_docked_pdbs <- list.files(pdb_dir, pattern = "\\.pdb$", recursive = TRUE, full.names = TRUE)
-
-#########################################################################################
-### DECOMMENT FOR INTERACTIVE EXECUTION
-#########################################################################################
-
-# ### Required libraries
-# library(bio3d)
-# library(dplyr)
-# library(tidyr)
-# library(future)
-# library(furrr)
-# library(data.table)
-# 
-# # Define the path to a custom function files
+# pacman::p_load(bio3d, dplyr, tidyr, future, furrr, data.table)
 # source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 # 
-# ### Set up parallelization to speed up computation
-# plan(multisession, workers = parallel::detectCores() - 1)
+# ### Command-line input
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 2) stop("Usage: Rscript score_gr.R <pot_dir> <dockq_csv> [n_workers] [pdb_dir]")
+# pot_dir     <- args[1]                       # folder containing ring_*_potential.csv
+# dockq_file  <- args[2]
+# n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
+# pdb_dir     <- if (length(args) >= 4) args[4] else "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+# results_dir <- pot_dir                       # output goes next to the potentials
 # 
-# ### Define directories and global parameters
-# pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
-# results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/"
-# dir.create(results_dir, showWarnings = FALSE)
+# if (file.exists(file.path(results_dir, "layer_score_dockq.csv"))) {
+#   message("Already done: ", results_dir); quit(save = "no", status = 0)
+# }
+# 
+# if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
 # 
 # DistCutoff <- 8.5
 # Nsteps <- 3
-# 
-# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
 # amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
 #                  "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
 # 
-# ### --- Load precomputed long-format potential tables (from the ring-contacts script) ---
-# df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_asym_potential.csv")
-# df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_sym_potential.csv")
+# ### Potentials of THIS group
+# df_asym_long <- fread(file.path(pot_dir, "ring_asym_potential.csv"))
+# df_sym_long  <- fread(file.path(pot_dir, "ring_sym_potential.csv"))
 # 
 # # Lookup asimmetrico: chiave diretta resid_ab_resid_ag_ringpair
 # df_asym_long[, lookup_key := paste(resid_ab, resid_ag, ring_pair, sep = "_")]
@@ -116,10 +67,59 @@ all_docked_pdbs <- list.files(pdb_dir, pattern = "\\.pdb$", recursive = TRUE, fu
 # df_sym_long_full[, lookup_key := paste(aa_i, aa_j, ring_pair, sep = "_")]
 # setkey(df_sym_long_full, lookup_key)
 # 
-# # Retrieve all PDB files from the docking folder
-# all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
-# 
-# # pdb_path <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/9o58_H_L_A_9.pdb"
+# all_docked_pdbs <- list.files(pdb_dir, pattern = "\\.pdb$", recursive = TRUE, full.names = TRUE)
+
+#########################################################################################
+### DECOMMENT FOR INTERACTIVE EXECUTION
+#########################################################################################
+
+### Required libraries
+library(bio3d)
+library(dplyr)
+library(tidyr)
+library(future)
+library(furrr)
+library(data.table)
+
+# Define the path to a custom function files
+source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+
+### Set up parallelization to speed up computation
+plan(multisession, workers = parallel::detectCores() - 1)
+
+### Define directories and global parameters
+pdb_dir <- "/Users/lorenzosisti/Downloads/models_2_renamed/af2/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/scores_new_paper/af2/"
+dir.create(results_dir, showWarnings = FALSE)
+
+DistCutoff <- 8.5
+Nsteps <- 3
+
+# Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
+
+### --- Load precomputed long-format potential tables (from the ring-contacts script) ---
+df_asym_long <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_asym_potential.csv")
+df_sym_long  <- fread("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl/ring_sym_potential.csv")
+
+# Lookup asimmetrico: chiave diretta resid_ab_resid_ag_ringpair
+df_asym_long[, lookup_key := paste(resid_ab, resid_ag, ring_pair, sep = "_")]
+setkey(df_asym_long, lookup_key)
+
+# Lookup simmetrico: la tabella ha solo resid_i <= resid_j -> va "specchiata"
+# per coprire entrambi gli ordinamenti aa1/aa2 osservati nei contatti
+df_sym_long_full <- rbindlist(list(
+  df_sym_long[, .(aa_i = resid_i, aa_j = resid_j, ring_pair, potential)],
+  df_sym_long[resid_i != resid_j, .(aa_i = resid_j, aa_j = resid_i, ring_pair, potential)]
+))
+df_sym_long_full[, lookup_key := paste(aa_i, aa_j, ring_pair, sep = "_")]
+setkey(df_sym_long_full, lookup_key)
+
+# Retrieve all PDB files from the docking folder
+all_docked_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# pdb_path <- "/Users/lorenzosisti/Downloads/docked_structures_renamed_AF3_11_06/9o58_H_L_A_9.pdb"
 
 #########################################################################################
 #########################################################################################
@@ -359,20 +359,20 @@ summary_results <- future_map_dfr(
 
 ### DECOMMENT FOR BATCH EXECUTION
 
-### Merge with DockQ
-DOCKQ_ID_COL <- "Model"        # <-- column in dockq_af3.csv holding the model name: ADJUST
-dockq <- fread(dockq_file)
-if (!DOCKQ_ID_COL %in% names(dockq))
-  stop("Column '", DOCKQ_ID_COL, "' not in DockQ file. Available: ", paste(names(dockq), collapse = ", "))
-
-summary_results$key <- sub("\\.pdb$", "", summary_results$pdb)
-dockq$key           <- sub("\\.pdb$", "", dockq[[DOCKQ_ID_COL]])
-
-merged <- merge(summary_results, dockq, by = "key", all.x = TRUE)
-merged$key <- NULL
-fwrite(merged, file.path(results_dir, "layer_score_dockq.csv"))
+# ### Merge with DockQ
+# DOCKQ_ID_COL <- "Model"        # <-- column in dockq_af3.csv holding the model name: ADJUST
+# dockq <- fread(dockq_file)
+# if (!DOCKQ_ID_COL %in% names(dockq))
+#   stop("Column '", DOCKQ_ID_COL, "' not in DockQ file. Available: ", paste(names(dockq), collapse = ", "))
+# 
+# summary_results$key <- sub("\\.pdb$", "", summary_results$pdb)
+# dockq$key           <- sub("\\.pdb$", "", dockq[[DOCKQ_ID_COL]])
+# 
+# merged <- merge(summary_results, dockq, by = "key", all.x = TRUE)
+# merged$key <- NULL
+# fwrite(merged, file.path(results_dir, "layer_score_dockq.csv"))
 
 ### DECOMMENT FOR INTERACTIVE EXECUTION
-# # Salva in CSV
-# write.csv(summary_results, file = file.path(results_dir, "layer_score.csv"),
-#           row.names = FALSE)
+# Salva in CSV
+write.csv(summary_results, file = file.path(results_dir, "layer_score.csv"),
+          row.names = FALSE)

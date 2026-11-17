@@ -12,70 +12,75 @@
 ### DECOMMENT FOR BATCH EXECUTION
 #########################################################################################
 
-### Required libraries
-pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
-source("/Users/lorenzosisti/TiNDER/functions.R")
-
-### Command-line input
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 2) stop("Usage: Rscript potential.R <pdb_list.txt> <out_dir> [n_workers]")
-list_file   <- args[1]
-results_dir <- args[2]
-n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
-
-dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
-if (file.exists(file.path(results_dir, "ring_sym_potential.csv"))) {
-  message("Already done: ", results_dir); quit(save = "no", status = 0)
-}
-
-if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
-handlers(global = TRUE)
-handlers("progress")          # "rstudio" doesn't work from a terminal
-
-DistCutoff <- 8.5
-S <- 0.02
-Nsteps <- 3
-amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
-                 "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
-
-all_pdbs <- readLines(list_file)
+# ### Required libraries
+# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+# 
+# source("/Users/lorenzosisti/TiNDER/functions.R")
+# 
+# ### Command-line input
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 2) stop("Usage: Rscript potential.R <pdb_list.txt> <out_dir> [n_workers]")
+# list_file   <- args[1]
+# results_dir <- args[2]
+# n_workers   <- if (length(args) >= 3) as.integer(args[3]) else parallel::detectCores() - 1
+# 
+# dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
+# if (file.exists(file.path(results_dir, "ring_sym_potential.csv"))) {
+#   message("Already done: ", results_dir); quit(save = "no", status = 0)
+# }
+# 
+# if (n_workers > 1) plan(multisession, workers = n_workers) else plan(sequential)
+# handlers(global = TRUE)
+# handlers("progress")          # "rstudio" doesn't work from a terminal
+# 
+# DistCutoff <- 8.5
+# S <- 0.02
+# Nsteps <- 3
+# amino_acids <- c("ARG","LYS","ASN","ASP","GLN","GLU","HIS","PRO","TYR","TRP",
+#                  "SER","THR","GLY","ALA","MET","CYS","PHE","LEU","VAL","ILE")
+# 
+# all_pdbs <- readLines(list_file)
 
 #########################################################################################
 ### DECOMMENT FOR INTERACTIVE EXECUTION
 #########################################################################################
 
-# ### Required libraries
-# pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
-#                pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
-# 
-# # Define the path to a custom function files
-# #source("/path/to/your/custom/functions/files/functions.R")
-# #source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
-# source("/Users/lorenzosisti/TiNDER/functions.R")
-# 
-# ### Set up parallelization to speed up computation
-# plan(multisession, workers = parallel::detectCores() - 1)
-# handlers(global = TRUE)
-# handlers("rstudio")
-# 
-# ### Define directories and global parameters
-# pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-# results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl_18_10/"
-# dir.create(results_dir, showWarnings = FALSE)
-# 
-# # Distance cutoff (Å) to define contact between side-chains centroids
-# DistCutoff <- 8.5  
-# S <- 0.02
-# Nsteps <- 3
-# 
-# # Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
-# amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
-#                  "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE") 
-# 
-# set.seed(1234)
-# 
-# all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+### Required libraries
+pacman::p_load(bio3d, dplyr, future, furrr, purrr, progressr,
+               pheatmap, patchwork, ggplotify, reshape2, tidyr, data.table, ggplot2, viridisLite)
+
+# Define the path to a custom function files
+#source("/path/to/your/custom/functions/files/functions.R")
+#source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
+source("/Users/lorenzosisti/TiNDER/functions.R")
+
+### Set up parallelization to speed up computation
+plan(multisession, workers = parallel::detectCores() - 1)
+handlers(global = TRUE)
+handlers("rstudio")
+
+### Define directories and global parameters
+pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl_06_11/"
+dir.create(results_dir, showWarnings = FALSE)
+
+# Distance cutoff (Å) to define contact between side-chains centroids
+DistCutoff <- 8.5
+S <- 0.02
+Nsteps <- 3
+
+# Amino acids ordered according to the Kyte-Doolittle hydrophobicity scale
+amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", "TRP",
+                 "SER", "THR", "GLY", "ALA", "MET", "CYS", "PHE", "LEU", "VAL", "ILE")
+
+set.seed(1234)
+
+all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# Diverging palette: purple -> white -> orange (white = 0)
+n_bins <- 51   # odd number so the central bin (containing 0) is exactly white
+pal_div <- colorRampPalette(c("darkorchid", "#FFFFFF", "darkorange"), space = "Lab")(n_bins)
 
 #########################################################################################
 #########################################################################################
@@ -381,7 +386,7 @@ plot_potential_heatmap <- function(df_potential,
   if (!symmetric) main_title <- paste0(main_title, "\n(rows = Antibody, cols = Antigen)")
   
   p <- pheatmap(mat,
-                color = viridisLite::plasma(50, direction = -1),,
+                color = pal_div,
                 breaks = seq(-lim, lim, length.out = 51),
                 cluster_rows = FALSE,
                 cluster_cols = FALSE,
@@ -404,10 +409,14 @@ plot_potential_heatmap <- function(df_potential,
 
 
 # Shared limit across all 6 asymmetric ring pairs
-lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
+#lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
 
 # Shared limit across all 6 symmetric ring pairs
-lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
+#lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
+
+# Fixed limit: color scale saturates at +/- 1.5
+lim_asym <- 1.5
+lim_sym  <- 1.5
 
 heatmaps_asym <- map(ring_pairs, ~ plot_potential_heatmap(df_potential_combined,
                                                           ring_name = .x,

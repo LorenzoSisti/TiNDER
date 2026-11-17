@@ -23,8 +23,11 @@ source("/Users/lorenzosisti/Documents/Script_ottimizzati_funzioni/functions.R")
 plan(multisession, workers = parallel::detectCores() - 1)
 
 ### Define directories and global parameters
-pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
-results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/"
+#pdb_dir <- "/Users/lorenzosisti/TiNDER/data/docking_af3/"
+#results_dir <- "/Users/lorenzosisti/TiNDER/data/score_per_af3_pose/"
+
+pdb_dir <- "/Users/lorenzosisti/Downloads/models_2_renamed/protenix/"
+results_dir <- "/Users/lorenzosisti/TiNDER/data/scores_new_paper/protenix/"
 
 #pdb_dir <- "/path/to/your/docked/structures/files/directory/"
 #results_dir <- "/path/to/the/directory/where/you/have/the/contact/matrix/and/where/you/want/to/save/the/potential/matrices/"

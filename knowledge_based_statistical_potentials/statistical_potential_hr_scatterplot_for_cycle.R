@@ -6,13 +6,13 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 
 # Caricamento dataset
 hydropathy_complementarity_matrix <- read_csv("/Users/lorenzosisti/TiNDER/data/hydropathy_complementarity/Hr_complementarity_matrix.csv")
-#statistical_potential_matrix <- read_csv("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/sc_centroid/whole_int_asym_potential.csv") %>%
-  #mutate(part = toupper(part))
-statistical_potential_matrix <- read_csv("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl_18_10/ring_asym_potential.csv") %>%
-  rename(part = ring_pair) %>%
+statistical_potential_matrix <- read_csv("/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_18_10/sc_centroid/whole_int_asym_potential.csv") %>%
   mutate(part = toupper(part))
+#statistical_potential_matrix <- read_csv("/Users/lorenzosisti/TiNDER/data/pmf_layer_sippl_18_10/ring_asym_potential.csv") %>%
+  #rename(part = ring_pair) %>%
+  #mutate(part = toupper(part))
 
-output_dir <- "/Users/lorenzosisti/TiNDER/data/scatterplots_gr"
+output_dir <- "/Users/lorenzosisti/TiNDER/data/scatterplots_cdr_7_11"
 # Crea la cartella se non esiste già
 if (!dir.exists(output_dir)) {
   dir.create(output_dir, recursive = TRUE)
@@ -72,23 +72,28 @@ for (p in unique_parts) {
     geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
     geom_point(size = 2.5, alpha = 0.9) +
     annotate(
-      "text", 
-      x = mean(range(pairs_df$upper, na.rm = TRUE)), 
-      y = Inf, 
-      hjust = 0.5, 
-      vjust = 1.2, 
-      label = sprintf("Pearson r = %.2f", r_triangles)
+      "text",
+      x = mean(global_lims),
+      y = Inf,
+      hjust = 0.5,
+      vjust = 1.5,
+      label = sprintf("Pearson r = %.2f", r_triangles),
+      size = 14 / .pt
     ) +
     scale_color_viridis_c(option = "plasma") +
     coord_fixed(ratio = 1, xlim = global_lims, ylim = global_lims, expand = FALSE) +  # <-- qui
     labs(
-      title = paste("Contacting layers:", p), # Here, put "CDR" when working w/ CDRs and not layers
-      x = "Upper triangle potential (Ab residue i - Ag residue j)",
-      y = "Lower triangle potential (Ab residue j - Ag residue i)",
+      title = paste("CDR", p), # Here, put "CDR" when working w/ CDRs and not layers ("Layers")
+      x = "Upper hemimatrix",
+      y = "Lower hemimatrix",
       color = expression(H[r])
     ) +
     theme_minimal() +
-    theme(legend.title = element_text(hjust = 0.2))
+    theme(
+      legend.title = element_text(hjust = 0.2),
+      axis.text  = element_text(size = 12),
+      axis.title = element_text(size = 14)
+    )
   
   # Salvataggio del grafico in PNG (dimensioni 7x5 o 5x7 pollici a seconda dell'orientamento desiderato)
   output_filename <- paste0("scatterplot_potential_", p, ".png")

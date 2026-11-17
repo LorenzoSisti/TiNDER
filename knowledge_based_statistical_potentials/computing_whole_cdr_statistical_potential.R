@@ -64,7 +64,7 @@ handlers("rstudio")
 
 ### Define directories and global parameters
 pdb_dir <- "/Users/lorenzosisti/Downloads/database_settembre_renamed/"
-base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_24_10/"
+base_results_dir <- "/Users/lorenzosisti/TiNDER/data/pmf_whole_cdr_sippl_06_11/"
 dir.create(base_results_dir, showWarnings = FALSE)
 
 S <- 0.02
@@ -90,6 +90,12 @@ amino_acids <- c("ARG", "LYS", "ASN", "ASP", "GLN", "GLU", "HIS", "PRO", "TYR", 
 set.seed(1234)
 
 all_pdbs <- list.files(pdb_dir, pattern = "*.pdb", recursive = TRUE, full.names = TRUE)
+
+# Diverging palette: purple -> white -> orange (white = 0)
+n_bins <- 51   # odd number so the central bin (containing 0) is exactly white
+pal_div <- colorRampPalette(c("darkorchid", "#FFFFFF", "darkorange"), space = "Lab")(n_bins)
+
+pal_orchid <- colorRampPalette(c("white", "darkorchid"))(50)
 
 # pdb_path <- "/Users/lorenzosisti/Downloads/database_settembre_renamed//9rm2.pdb" # Just for single-path testing
 
@@ -404,7 +410,7 @@ for (repr in names(REPR_PARAMS)) {
     }
     
     p <- pheatmap(mat,
-                  viridisLite::plasma(50, direction = -1),
+                  color = pal_div,
                   breaks = seq(-lim, lim, length.out = 51),
                   cluster_rows = FALSE,
                   cluster_cols = FALSE,
@@ -428,8 +434,12 @@ for (repr in names(REPR_PARAMS)) {
   }
   
   # Color limit shared among matrices, for better visual comparisons
-  lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
-  lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
+  #lim_asym <- max(abs(df_potential_combined$potential), na.rm = TRUE)
+  #lim_sym  <- max(abs(df_sym_potential_combined$potential), na.rm = TRUE)
+  
+  # Fixed limit: color scale saturates at +/- 1.5
+  lim_asym <- 1.5
+  lim_sym  <- 1.5
   
   heatmaps_asym <- map(parts, ~ plot_potential_heatmap(df_potential_combined,
                                                        part_name = .x,
@@ -470,7 +480,7 @@ for (repr in names(REPR_PARAMS)) {
     colnames(cor_matrix) <- toupper(colnames(cor_matrix))
     
     p <- pheatmap(cor_matrix,
-                  color = plasma_transparent,
+                  color = pal_orchid,
                   breaks = seq(lim_min, lim_max, length.out = 51),
                   display_numbers = TRUE,
                   number_format = "%.2f",
